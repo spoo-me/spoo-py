@@ -71,6 +71,7 @@ if not check.available:
 
 # Fetch one link by id, or by its address
 link = client.urls.get(url.id)
+preview = client.urls.preview("mylink")   # public: destination, status, protection
 link = client.urls.get_by_alias("mylink")                    # your base domain
 link = client.urls.get_by_alias("mylink", domain="links.acme.com")
 
@@ -162,16 +163,17 @@ public = client.stats.public("mylink", password="Secret@123")
 
 ### Exports
 
-Same parameters as `query()`, returned as `bytes` in `csv`, `xlsx`, `json`, or `xml`:
+Same parameters as `query()`, in `csv`, `xlsx`, `json`, or `xml`. The return value is `bytes` plus the server's suggested `filename` and `content_type`:
 
 ```python
 from pathlib import Path
 from spoo import ExportFormat
 
 data = client.stats.export(ExportFormat.CSV, start_date="2026-07-01")
-Path("report.csv").write_bytes(data)
+Path(data.filename or "report.csv").write_bytes(data)   # server names the file
 
-Path("mylink.xlsx").write_bytes(client.stats.export_link(url.id, ExportFormat.XLSX))
+link_data = client.stats.export_link(url.id, ExportFormat.XLSX)
+Path(link_data.filename or "link.xlsx").write_bytes(link_data)
 ```
 
 ## Sign in with Spoo
@@ -210,8 +212,11 @@ Errors map to typed exceptions carrying the backend error code:
 | 404 | `NotFoundError` |
 | 409 | `ConflictError` |
 | 410 | `GoneError` |
+| 413 | `PayloadTooLargeError` |
 | 429 | `RateLimitError` (`retry_after`, `limit`, `remaining`, `reset`) |
-| 5xx | `InternalServerError` |
+| 451 | `ContentBlockedError` (the link was taken down for safety) |
+| 503 | `ServiceUnavailableError` |
+| other 5xx | `InternalServerError` |
 
 Network failures raise `APIConnectionError` / `APITimeoutError`; a rejected refresh token raises `SessionExpiredError`. All of them subclass `SpooError`.
 

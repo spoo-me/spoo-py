@@ -18,6 +18,7 @@ from ._constants import (
 from ._errors import (
     APIConnectionError,
     APITimeoutError,
+    parse_retry_after,
     raise_for_status,
 )
 
@@ -89,9 +90,9 @@ class BaseTransport:
 
     def _retry_delay(self, response: httpx.Response, attempt: int) -> float:
         if response.status_code == 429:
-            retry_after = response.headers.get("Retry-After")
-            if retry_after:
-                return float(retry_after)
+            retry_after = parse_retry_after(response.headers.get("Retry-After"))
+            if retry_after is not None:
+                return retry_after
         return self._backoff_delay(attempt)
 
 

@@ -1,12 +1,53 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from typing import Any
+from urllib.parse import unquote
+
+import httpx
 
 from ..types.shared import ExportFormat, GroupBy, Metric, enum_value
-from ..types.stats import LinkStatsResponse, PublicStatsResponse, StatsFilter, StatsResponse
+from ..types.stats import (
+    ExportFile,
+    LinkStatsFilter,
+    LinkStatsResponse,
+    PublicStatsResponse,
+    StatsFilter,
+    StatsResponse,
+)
 from ._base import AsyncAPIResource, SyncAPIResource
+
+# RFC 5987 form first (filename*=utf-8''...), plain filename= as fallback.
+_FILENAME_STAR_RE = re.compile(r"filename\*=utf-8''([^;]+)", re.IGNORECASE)
+_FILENAME_RE = re.compile(r'filename="?([^";]+)"?', re.IGNORECASE)
+
+
+def _export_file(response: httpx.Response) -> ExportFile:
+    disposition = response.headers.get("Content-Disposition", "")
+    match = _FILENAME_STAR_RE.search(disposition)
+    filename = unquote(match.group(1)) if match else None
+    if filename is None:
+        plain = _FILENAME_RE.search(disposition)
+        filename = plain.group(1) if plain else None
+    return ExportFile(
+        response.content,
+        filename=filename,
+        content_type=response.headers.get("Content-Type"),
+    )
+
+
+def _reject_identity_filters(filters: LinkStatsFilter | dict[str, Any] | None) -> None:
+    if filters is None:
+        return
+    d = filters.to_dict() if isinstance(filters, LinkStatsFilter) else filters
+    bad = {"short_code", "url_id"} & set(d)
+    if bad:
+        raise ValueError(
+            f"per-link endpoints already carry the link identity; remove {sorted(bad)} from filters"
+        )
+
 
 # ── Shared pure functions ────────────────────────────────────────────────
 
@@ -18,7 +59,7 @@ def _build_stats_params(
     group_by: list[GroupBy | str] | None,
     metrics: list[Metric | str] | None,
     timezone: str,
-    filters: StatsFilter | dict[str, Any] | None,
+    filters: LinkStatsFilter | dict[str, Any] | None,
 ) -> dict[str, Any]:
     params: dict[str, Any] = {
         "timezone": timezone,
@@ -32,7 +73,7 @@ def _build_stats_params(
     if metrics is not None:
         params["metrics"] = ",".join(enum_value(m) for m in metrics)
     if filters is not None:
-        filter_dict = filters.to_dict() if isinstance(filters, StatsFilter) else filters
+        filter_dict = filters.to_dict() if isinstance(filters, LinkStatsFilter) else filters
         if filter_dict:
             params["filters"] = json.dumps(filter_dict)
     return params
@@ -96,12 +137,13 @@ class AsyncStats(AsyncAPIResource):
         group_by: list[GroupBy | str] | None = None,
         metrics: list[Metric | str] | None = None,
         timezone: str = "UTC",
-        filters: StatsFilter | dict[str, Any] | None = None,
+        filters: LinkStatsFilter | dict[str, Any] | None = None,
     ) -> LinkStatsResponse:
         """Analytics for one owned link (GET /stats/links/{url_id}).
 
         Requires authentication. Unknown or foreign ids answer 404.
         """
+        _reject_identity_filters(filters)
         params = _build_stats_params(
             start_date=start_date,
             end_date=end_date,
@@ -151,11 +193,12 @@ class AsyncStats(AsyncAPIResource):
         metrics: list[Metric | str] | None = None,
         timezone: str = "UTC",
         filters: StatsFilter | dict[str, Any] | None = None,
-    ) -> bytes:
+    ) -> ExportFile:
         """Export account-wide analytics (GET /export). Same params as query().
 
-        Returns the file content; write it wherever you want
-        (``Path("report.csv").write_bytes(data)``).
+        Returns the file content as bytes, with the server's suggested
+        ``filename`` and ``content_type`` attached
+        (``Path(data.filename or "export.csv").write_bytes(data)``).
         """
         params = _build_stats_params(
             start_date=start_date,
@@ -167,7 +210,7 @@ class AsyncStats(AsyncAPIResource):
         )
         params["format"] = enum_value(format)
         response = await self._transport.request_raw("GET", "/export", params=params)
-        return response.content
+        return _export_file(response)
 
     async def export_link(
         self,
@@ -179,9 +222,13 @@ class AsyncStats(AsyncAPIResource):
         group_by: list[GroupBy | str] | None = None,
         metrics: list[Metric | str] | None = None,
         timezone: str = "UTC",
-        filters: StatsFilter | dict[str, Any] | None = None,
-    ) -> bytes:
-        """Export analytics for one owned link (GET /export/links/{url_id})."""
+        filters: LinkStatsFilter | dict[str, Any] | None = None,
+    ) -> ExportFile:
+        """Export analytics for one owned link (GET /export/links/{url_id}).
+
+        The returned file carries the link's own filename from the server.
+        """
+        _reject_identity_filters(filters)
         params = _build_stats_params(
             start_date=start_date,
             end_date=end_date,
@@ -194,7 +241,7 @@ class AsyncStats(AsyncAPIResource):
         response = await self._transport.request_raw(
             "GET", f"/export/links/{url_id}", params=params
         )
-        return response.content
+        return _export_file(response)
 
 
 # ── Sync resource ────────────────────────────────────────────────────────
@@ -237,12 +284,13 @@ class Stats(SyncAPIResource):
         group_by: list[GroupBy | str] | None = None,
         metrics: list[Metric | str] | None = None,
         timezone: str = "UTC",
-        filters: StatsFilter | dict[str, Any] | None = None,
+        filters: LinkStatsFilter | dict[str, Any] | None = None,
     ) -> LinkStatsResponse:
         """Analytics for one owned link (GET /stats/links/{url_id}).
 
         Requires authentication. Unknown or foreign ids answer 404.
         """
+        _reject_identity_filters(filters)
         params = _build_stats_params(
             start_date=start_date,
             end_date=end_date,
@@ -290,11 +338,12 @@ class Stats(SyncAPIResource):
         metrics: list[Metric | str] | None = None,
         timezone: str = "UTC",
         filters: StatsFilter | dict[str, Any] | None = None,
-    ) -> bytes:
+    ) -> ExportFile:
         """Export account-wide analytics (GET /export). Same params as query().
 
-        Returns the file content; write it wherever you want
-        (``Path("report.csv").write_bytes(data)``).
+        Returns the file content as bytes, with the server's suggested
+        ``filename`` and ``content_type`` attached
+        (``Path(data.filename or "export.csv").write_bytes(data)``).
         """
         params = _build_stats_params(
             start_date=start_date,
@@ -306,7 +355,7 @@ class Stats(SyncAPIResource):
         )
         params["format"] = enum_value(format)
         response = self._transport.request_raw("GET", "/export", params=params)
-        return response.content
+        return _export_file(response)
 
     def export_link(
         self,
@@ -318,9 +367,13 @@ class Stats(SyncAPIResource):
         group_by: list[GroupBy | str] | None = None,
         metrics: list[Metric | str] | None = None,
         timezone: str = "UTC",
-        filters: StatsFilter | dict[str, Any] | None = None,
-    ) -> bytes:
-        """Export analytics for one owned link (GET /export/links/{url_id})."""
+        filters: LinkStatsFilter | dict[str, Any] | None = None,
+    ) -> ExportFile:
+        """Export analytics for one owned link (GET /export/links/{url_id}).
+
+        The returned file carries the link's own filename from the server.
+        """
+        _reject_identity_filters(filters)
         params = _build_stats_params(
             start_date=start_date,
             end_date=end_date,
@@ -331,4 +384,4 @@ class Stats(SyncAPIResource):
         )
         params["format"] = enum_value(format)
         response = self._transport.request_raw("GET", f"/export/links/{url_id}", params=params)
-        return response.content
+        return _export_file(response)

@@ -96,18 +96,21 @@ class PublicStatsResponse(BaseModel):
     stats: StatsResponse
 
 
-class StatsFilter:
-    """Filter object for stats queries. Serialized to JSON query param."""
+class LinkStatsFilter:
+    """Dimension filters valid on per-link stats and exports.
 
-    _FIELDS = (
+    Deliberately excludes ``short_code`` and ``url_id``: the per-link
+    endpoints carry the link identity in the path and reject those filters.
+    Use :class:`StatsFilter` for account-wide queries.
+    """
+
+    _FIELDS: tuple[str, ...] = (
         "browser",
         "os",
         "device",
         "country",
         "city",
         "referrer",
-        "short_code",
-        "url_id",
         "utm_source",
         "utm_medium",
         "utm_campaign",
@@ -122,8 +125,6 @@ class StatsFilter:
         country: list[str] | None = None,
         city: list[str] | None = None,
         referrer: list[str] | None = None,
-        short_code: list[str] | None = None,
-        url_id: list[str] | None = None,
         utm_source: list[str] | None = None,
         utm_medium: list[str] | None = None,
         utm_campaign: list[str] | None = None,
@@ -134,8 +135,6 @@ class StatsFilter:
         self.country = country
         self.city = city
         self.referrer = referrer
-        self.short_code = short_code
-        self.url_id = url_id
         self.utm_source = utm_source
         self.utm_medium = utm_medium
         self.utm_campaign = utm_campaign
@@ -147,3 +146,40 @@ class StatsFilter:
             if value:
                 d[name] = value
         return d
+
+
+class StatsFilter(LinkStatsFilter):
+    """Filter object for account-wide stats queries. Serialized to JSON."""
+
+    _FIELDS = (*LinkStatsFilter._FIELDS, "short_code", "url_id")
+
+    def __init__(
+        self,
+        *,
+        short_code: list[str] | None = None,
+        url_id: list[str] | None = None,
+        **dimensions: list[str] | None,
+    ) -> None:
+        super().__init__(**dimensions)
+        self.short_code = short_code
+        self.url_id = url_id
+
+
+class ExportFile(bytes):
+    """Export content that still behaves as ``bytes``, plus the server's
+    suggested ``filename`` and ``content_type`` from the response headers.
+
+    ``Path(export.filename or "export.csv").write_bytes(export)`` works
+    unchanged; the filename is what makes per-link exports distinguishable.
+    """
+
+    filename: str | None
+    content_type: str | None
+
+    def __new__(
+        cls, content: bytes, *, filename: str | None = None, content_type: str | None = None
+    ) -> ExportFile:
+        obj = super().__new__(cls, content)
+        obj.filename = filename
+        obj.content_type = content_type
+        return obj

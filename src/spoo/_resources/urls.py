@@ -24,6 +24,7 @@ from ..types.url import (
     ClaimedUrls,
     ClaimResult,
     DeletedUrl,
+    PublicPreview,
     ShortenedUrl,
     UpdatedUrl,
     UrlFilter,
@@ -218,6 +219,16 @@ class AsyncURLs(AsyncAPIResource):
         """Claim up to 16 anonymously created URLs, as (url_id, claim_token) pairs."""
         return await self._transport.request(
             "POST", "/urls/claim", json=_build_claim_body(pairs), cast_to=ClaimedUrls
+        )
+
+    async def preview(self, short_code: str) -> PublicPreview:
+        """Public preview of any short link: destination, status, protection.
+
+        No authentication required. The read to make before following an
+        unknown short link.
+        """
+        return await self._transport.request(
+            "GET", f"/public/preview/{quote(short_code)}", cast_to=PublicPreview
         )
 
     async def emoji_set(self, *, refresh: bool = False) -> EmojiSet:
@@ -439,6 +450,16 @@ class URLs(SyncAPIResource):
         """Claim up to 16 anonymously created URLs, as (url_id, claim_token) pairs."""
         return self._transport.request(
             "POST", "/urls/claim", json=_build_claim_body(pairs), cast_to=ClaimedUrls
+        )
+
+    def preview(self, short_code: str) -> PublicPreview:
+        """Public preview of any short link: destination, status, protection.
+
+        No authentication required. The read to make before following an
+        unknown short link.
+        """
+        return self._transport.request(
+            "GET", f"/public/preview/{quote(short_code)}", cast_to=PublicPreview
         )
 
     def emoji_set(self, *, refresh: bool = False) -> EmojiSet:

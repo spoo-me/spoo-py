@@ -161,6 +161,38 @@ class BulkResultRow(BaseModel):
     error: str | None = None
 
 
+class PreviewDestination(BaseModel):
+    """Where a link points, as shown on the public preview."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    url: str
+    domain: str
+    path: str
+    is_https: bool
+
+
+class PublicPreview(BaseModel):
+    """Response from GET /api/v1/public/preview/{short_code}.
+
+    The unauthenticated "what is this link" read: what a bot, integration,
+    or safety check calls before following a short link. ``destination`` is
+    None for inactive/blocked links; geo-targeted links list per-country
+    destinations instead.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    generation: str
+    alias: str
+    short_url: str
+    status: str
+    created_at: str | None = None
+    password_protected: bool
+    destination: PreviewDestination | None = None
+    geo_destinations: list[dict[str, Any]] | None = None
+
+
 class BulkResult(BaseModel):
     """Response from POST /api/v1/urls/bulk/{delete,status,expiry,domain}."""
 
