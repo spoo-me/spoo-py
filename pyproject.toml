@@ -1,0 +1,84 @@
+[project]
+name = "spoo"
+dynamic = ["version"]
+description = "Official Python SDK for the spoo.me URL shortening API"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "spoo.me", email = "support@spoo.me" },
+]
+keywords = [
+    "url-shortener",
+    "spoo",
+    "spoo.me",
+    "sdk",
+    "api-client",
+    "url",
+    "shortener",
+    "link-management",
+    "analytics",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "httpx>=0.25.0,<1.0",
+    "pydantic>=2.0.0,<3.0",
+]
+
+[project.urls]
+Homepage = "https://spoo.me"
+Documentation = "https://docs.spoo.me"
+Repository = "https://github.com/spoo-me/spoo-py"
+Issues = "https://github.com/spoo-me/spoo-py/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/spoo/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/spoo"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src", "tests", "README.md", "LICENSE"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+    "pytest-cov>=5.0",
+    "mypy>=1.8",
+    "ruff>=0.4",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
