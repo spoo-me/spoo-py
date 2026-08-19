@@ -27,6 +27,20 @@ T = TypeVar("T", bound=BaseModel)
 _IDEMPOTENT_METHODS = frozenset({"GET", "PUT", "DELETE"})
 
 
+def _json_or_text(response: httpx.Response) -> Any:
+    """Parsed JSON, the raw text for non-JSON bodies, or None when empty.
+
+    The escape hatch can hit anything; a non-JSON 200 must not raise
+    outside the SDK's error types.
+    """
+    if not response.content:
+        return None
+    try:
+        return response.json()
+    except ValueError:
+        return response.text
+
+
 class BaseTransport:
     """Shared logic for both sync and async transports: headers, retry delay, response parsing."""
 
@@ -153,9 +167,7 @@ class AsyncTransport(BaseTransport):
         json: dict[str, Any] | None = None,
     ) -> Any:
         response = await self._send_with_retry(method, path, json=json, params=params)
-        if not response.content:
-            return None
-        return response.json()
+        return _json_or_text(response)
 
     async def _resolve_auth(self, headers: dict[str, str]) -> dict[str, str]:
         if isinstance(self._auth, DynamicBearerAuth) and "Authorization" not in headers:
@@ -266,9 +278,7 @@ class SyncTransport(BaseTransport):
         json: dict[str, Any] | None = None,
     ) -> Any:
         response = self._send_with_retry(method, path, json=json, params=params)
-        if not response.content:
-            return None
-        return response.json()
+        return _json_or_text(response)
 
     def _resolve_auth(self, headers: dict[str, str]) -> dict[str, str]:
         if isinstance(self._auth, DynamicBearerAuth) and "Authorization" not in headers:
