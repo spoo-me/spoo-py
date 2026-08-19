@@ -21,11 +21,11 @@ def main() -> None:
 
     # Phase 2: the user signed in; claim what they created
     with SpooClient() as client:
-        result = client.urls.claim(*pending)
+        result = client.links.claim(*pending)
         print(f"claim -> {result.status}")  # claimed | already_yours | invalid
 
         # Batches work too (up to 16 per call)
-        batch = client.urls.claim_many([pending])
+        batch = client.links.claim_many([pending])
         print(f"batch: {batch.claimed} claimed of {len(batch.results)}")
 
 

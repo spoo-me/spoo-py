@@ -84,7 +84,7 @@ def validate_emoji_alias(alias: str, accepted: frozenset[str], max_graphemes: in
                 break
         else:
             raise ValueError(
-                f"{canonical[i]!r} is not in the accepted emoji set (see client.urls.emoji_set())"
+                f"{canonical[i]!r} is not in the accepted emoji set (see client.links.emoji_set())"
             )
     if count > max_graphemes:
         raise ValueError(f"Emoji alias is limited to {max_graphemes} emoji, got {count}")

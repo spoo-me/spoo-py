@@ -4,10 +4,10 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from .shared import UrlStatus, enum_value
+from .shared import LinkStatus, enum_value
 
 
-class ShortenedUrl(BaseModel):
+class CreatedLink(BaseModel):
     """Response from POST /api/v1/shorten."""
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -27,11 +27,11 @@ class ShortenedUrl(BaseModel):
 
     Present only when the URL was created without authentication. Hold on to
     it: an authenticated client can later take ownership of the link with
-    ``client.urls.claim(url.id, url.claim_token)``. It is never shown again.
+    ``client.links.claim(url.id, url.claim_token)``. It is never shown again.
     """
 
 
-class UrlListItem(BaseModel):
+class Link(BaseModel):
     """A single URL in a list response."""
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -51,12 +51,12 @@ class UrlListItem(BaseModel):
     domain: str | None = None
 
 
-class UrlListResponse(BaseModel):
+class LinkPage(BaseModel):
     """Response from GET /api/v1/urls."""
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    items: list[UrlListItem]
+    items: list[Link]
     page: int
     pageSize: int
     total: int
@@ -65,7 +65,7 @@ class UrlListResponse(BaseModel):
     sortOrder: str
 
 
-class UpdatedUrl(BaseModel):
+class UpdatedLink(BaseModel):
     """Response from PATCH /api/v1/urls/{id}."""
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -83,7 +83,7 @@ class UpdatedUrl(BaseModel):
     updated_at: int
 
 
-class DeletedUrl(BaseModel):
+class DeletedLink(BaseModel):
     """Response from DELETE /api/v1/urls/{id}."""
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -92,7 +92,7 @@ class DeletedUrl(BaseModel):
     id: str
 
 
-class BulkDeletedUrls(BaseModel):
+class BulkDeletedLinks(BaseModel):
     """Response from DELETE /api/v1/urls?domain=<fqdn> (bulk delete)."""
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -130,7 +130,7 @@ class ClaimResult(BaseModel):
     status: str
 
 
-class ClaimedUrls(BaseModel):
+class ClaimedLinks(BaseModel):
     """Response from POST /api/v1/urls/claim. Never hard-fails per item."""
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -202,13 +202,13 @@ class BulkResult(BaseModel):
     results: list[BulkResultRow]
 
 
-class UrlFilter:
+class LinkFilter:
     """Filter object for list URLs query. Serialized to JSON query param."""
 
     def __init__(
         self,
         *,
-        status: str | UrlStatus | None = None,
+        status: str | LinkStatus | None = None,
         created_after: str | int | None = None,
         created_before: str | int | None = None,
         password_set: bool | None = None,

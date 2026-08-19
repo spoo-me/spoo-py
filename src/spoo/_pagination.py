@@ -3,28 +3,28 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
-from .types.url import UrlListItem, UrlListResponse
+from .types.link import Link, LinkPage
 
 
-class AsyncPaginator(AsyncIterator[UrlListItem]):
+class AsyncPaginator(AsyncIterator[Link]):
     """Async iterator that auto-paginates through URL list pages."""
 
     def __init__(
         self,
         *,
-        fetch_page: Any,  # Callable that returns UrlListResponse
+        fetch_page: Any,  # Callable that returns LinkPage
         params: dict[str, Any],
     ) -> None:
         self._fetch_page = fetch_page
         self._params = params
-        self._current_page: UrlListResponse | None = None
+        self._current_page: LinkPage | None = None
         self._index = 0
         self._exhausted = False
 
     def __aiter__(self) -> AsyncPaginator:
         return self
 
-    async def __anext__(self) -> UrlListItem:
+    async def __anext__(self) -> Link:
         if self._exhausted:
             raise StopAsyncIteration
 
@@ -46,25 +46,25 @@ class AsyncPaginator(AsyncIterator[UrlListItem]):
         return item
 
 
-class SyncPaginator(Iterator[UrlListItem]):
+class SyncPaginator(Iterator[Link]):
     """Sync iterator that auto-paginates through URL list pages."""
 
     def __init__(
         self,
         *,
-        fetch_page: Any,  # Callable that returns UrlListResponse
+        fetch_page: Any,  # Callable that returns LinkPage
         params: dict[str, Any],
     ) -> None:
         self._fetch_page = fetch_page
         self._params = params
-        self._current_page: UrlListResponse | None = None
+        self._current_page: LinkPage | None = None
         self._index = 0
         self._exhausted = False
 
     def __iter__(self) -> SyncPaginator:
         return self
 
-    def __next__(self) -> UrlListItem:
+    def __next__(self) -> Link:
         if self._exhausted:
             raise StopIteration
 

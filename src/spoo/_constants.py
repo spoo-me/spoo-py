@@ -13,6 +13,10 @@ CLIENT_TAG = f"sdk-py/{__version__}"
 ENV_API_KEY = "SPOO_API_KEY"
 ENV_BASE_URL = "SPOO_BASE_URL"
 
+# A Retry-After above this is not worth sleeping through inline; the caller
+# gets the RateLimitError immediately with retry_after intact to schedule.
+MAX_HONORED_RETRY_AFTER = 60.0
+
 RETRYABLE_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
 # POST/PATCH retry only where the server provably did no work.
 NONIDEMPOTENT_RETRYABLE_STATUS_CODES = frozenset({429, 503})

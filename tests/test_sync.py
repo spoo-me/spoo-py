@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 
-from spoo import ShortenedUrl, StatsResponse
+from spoo import CreatedLink, StatsResponse
 
 BASE_URL = "https://spoo.me/api/v1"
 
@@ -32,13 +32,13 @@ STATS_RESPONSE = {
 def test_sync_shorten(mock_api, sync_client):
     mock_api.post("/shorten").mock(return_value=httpx.Response(201, json=SHORTEN_RESPONSE))
     url = sync_client.shorten("https://example.com")
-    assert isinstance(url, ShortenedUrl)
+    assert isinstance(url, CreatedLink)
     assert url.alias == "synctest"
 
 
 def test_sync_urls_create(mock_api, sync_client):
     mock_api.post("/shorten").mock(return_value=httpx.Response(201, json=SHORTEN_RESPONSE))
-    url = sync_client.urls.create("https://example.com", alias="synctest")
+    url = sync_client.links.create("https://example.com", alias="synctest")
     assert url.short_url == "https://spoo.me/synctest"
 
 
@@ -98,7 +98,7 @@ def test_sync_list_page(mock_api, sync_client):
             },
         )
     )
-    page = sync_client.urls.list_page()
+    page = sync_client.links.list_page()
     assert page.total == 0
 
 
@@ -119,6 +119,6 @@ def test_sync_list_paginator(mock_api, sync_client):
             },
         )
     )
-    items = list(sync_client.urls.list())
+    items = list(sync_client.links.list())
     assert len(items) == 1
     assert items[0].alias == "a"

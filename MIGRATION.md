@@ -16,7 +16,7 @@ Requires Python 3.10+.
 | py_spoo_url 0.0.x | spoo 1.0 |
 | --- | --- |
 | `from py_spoo_url import Shortener` | `from spoo import SpooClient` |
-| `Shortener().shorten(url, alias=..., password=..., max_clicks=...)` returns a string | `client.shorten(url, alias=..., password=..., max_clicks=...)` returns a `ShortenedUrl` model (`.short_url` for the string) |
+| `Shortener().shorten(url, alias=..., password=..., max_clicks=...)` returns a string | `client.shorten(url, alias=..., password=..., max_clicks=...)` returns a `CreatedLink` model (`.short_url` for the string) |
 | `Shortener().emoji(url, emoji_alias=...)` | `client.shorten(url, alias="🚀🔥")` for a chosen alias, or `client.shorten(url, alias_type="emoji")` to auto-generate one. The SDK validates emoji against the server's accepted catalogue before sending. |
 | `Statistics(short_code, password=...)` fetches stats on init | `client.stats.public(short_code, password=...)` for public links, `client.stats.for_link(url_id)` for links you own, `client.stats.query(...)` across your account |
 | `Statistics.export_data(format=...)` writes a file | `client.stats.export(format)` returns bytes; write them with `Path(...).write_bytes(data)` |
@@ -60,8 +60,8 @@ Path("report.xlsx").write_bytes(client.stats.export(ExportFormat.XLSX))
 
 ## New things worth knowing
 
-- Everything you own is manageable: `client.urls.list()`, `.update()`, `.set_status()`, `.delete()`.
-- `client.urls.check_alias("name")` tells you whether an alias is free before you create.
+- Everything you own is manageable: `client.links.list()`, `.update()`, `.set_status()`, `.delete()`.
+- `client.links.check_alias("name")` tells you whether an alias is free before you create.
 - Account-wide analytics with grouping and filters: `client.stats.query(group_by=[...], filters=...)`.
 - Custom domains: pass `domain="links.acme.com"` to create, list, and shorten calls.
 - Automatic retries on 429 and 5xx with `Retry-After` support.

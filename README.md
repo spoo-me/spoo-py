@@ -52,11 +52,11 @@ Async is the same surface with `AsyncSpooClient`, `await`, and `async for`.
 ## Links
 
 ```python
-from spoo import SpooClient, UrlFilter, UrlStatus, SortBy
+from spoo import SpooClient, LinkFilter, LinkStatus, SortBy
 
 client = SpooClient(api_key="spoo_...")
 
-url = client.urls.create(
+url = client.links.create(
     "https://example.com",
     alias="mylink",
     password="Secret@123",
@@ -67,25 +67,25 @@ url = client.urls.create(
 )
 
 # Check availability first if you want a precise reason
-check = client.urls.check_alias("mylink")
+check = client.links.check_alias("mylink")
 if not check.available:
     print(check.reason)  # taken | format | length | reserved | emoji_policy
 
 # Fetch one link by id, or by its address
-link = client.urls.get(url.id)
-preview = client.urls.preview("mylink")   # public: destination, status, protection
-link = client.urls.get_by_alias("mylink")                    # your base domain
-link = client.urls.get_by_alias("mylink", domain="links.acme.com")
+link = client.links.get(url.id)
+preview = client.links.preview("mylink")   # public: destination, status, protection
+link = client.links.get_by_alias("mylink")                    # your base domain
+link = client.links.get_by_alias("mylink", domain="links.acme.com")
 
 # Iterate everything (auto-pagination), or one filtered page
-for item in client.urls.list(sort_by=SortBy.TOTAL_CLICKS):
+for item in client.links.list(sort_by=SortBy.TOTAL_CLICKS):
     print(item.alias, item.total_clicks)
-page = client.urls.list_page(filter=UrlFilter(status=UrlStatus.ACTIVE, search="docs"))
+page = client.links.list_page(filter=LinkFilter(status=LinkStatus.ACTIVE, search="docs"))
 
 # Update, toggle, delete
-client.urls.update(url.id, long_url="https://example.com/new", max_clicks=0)
-client.urls.set_status(url.id, UrlStatus.INACTIVE)
-client.urls.delete(url.id)
+client.links.update(url.id, long_url="https://example.com/new", max_clicks=0)
+client.links.set_status(url.id, LinkStatus.INACTIVE)
+client.links.delete(url.id)
 ```
 
 ### Bulk operations
@@ -93,15 +93,15 @@ client.urls.delete(url.id)
 Up to 100 ids per call; results are reported per item instead of throwing:
 
 ```python
-result = client.urls.bulk_set_status(ids, UrlStatus.INACTIVE)
+result = client.links.bulk_set_status(ids, LinkStatus.INACTIVE)
 print(result.summary.succeeded, result.summary.failed)
 for row in result.results:
     if not row.ok:
         print(row.id, row.error_code)
 
-client.urls.bulk_delete(ids)
-client.urls.bulk_set_expiry(ids, "2027-01-01T00:00:00")   # None clears
-client.urls.bulk_set_domain(ids, "links.acme.com")        # None = default
+client.links.bulk_delete(ids)
+client.links.bulk_set_expiry(ids, "2027-01-01T00:00:00")   # None clears
+client.links.bulk_set_domain(ids, "links.acme.com")        # None = default
 ```
 
 ### Emoji aliases
@@ -114,7 +114,7 @@ url = client.shorten("https://example.com", alias_type="emoji")  # auto-generate
 The SDK validates emoji aliases before sending, against the server's own accepted catalogue (fetched once per client and cached). The catalogue is available directly for building pickers:
 
 ```python
-emoji_set = client.urls.emoji_set()   # ~1170 entries with names and groups
+emoji_set = client.links.emoji_set()   # ~1170 entries with names and groups
 ```
 
 ### Claim links
@@ -124,10 +124,10 @@ Anonymous creates return a one-time `claim_token`. After the user signs in, the 
 ```python
 anon_url = SpooClient(api_key="").shorten("https://example.com")
 
-result = client.urls.claim(anon_url.id, anon_url.claim_token)
+result = client.links.claim(anon_url.id, anon_url.claim_token)
 print(result.status)   # claimed | already_yours | invalid
 
-client.urls.claim_many([(id1, token1), (id2, token2)])   # up to 16
+client.links.claim_many([(id1, token1), (id2, token2)])   # up to 16
 ```
 
 ## Statistics
@@ -241,17 +241,17 @@ Deliberately out of scope: API key management, account and profile lifecycle, `/
 
 | Method | Endpoint |
 | --- | --- |
-| `shorten`, `urls.create` | `POST /api/v1/shorten` |
-| `urls.check_alias` | `GET /api/v1/shorten/check-alias` |
-| `urls.list`, `urls.list_page` | `GET /api/v1/urls` |
-| `urls.get` | `GET /api/v1/urls/{url_id}` |
-| `urls.get_by_alias` | `GET /api/v1/urls/{domain}/{alias}` |
-| `urls.update`, `urls.set_status`, `urls.delete` | `PATCH`/`DELETE /api/v1/urls/{url_id}` |
-| `urls.delete_all` | `DELETE /api/v1/urls?domain=` |
-| `urls.claim`, `urls.claim_many` | `POST /api/v1/urls/claim` |
-| `urls.bulk_*` | `POST /api/v1/urls/bulk/{delete,status,expiry,domain}` |
-| `urls.preview` | `GET /api/v1/public/preview/{short_code}` |
-| `urls.emoji_set` | `GET /api/v1/emoji-set` |
+| `shorten`, `links.create` | `POST /api/v1/shorten` |
+| `links.check_alias` | `GET /api/v1/shorten/check-alias` |
+| `links.list`, `links.list_page` | `GET /api/v1/urls` |
+| `links.get` | `GET /api/v1/urls/{url_id}` |
+| `links.get_by_alias` | `GET /api/v1/urls/{domain}/{alias}` |
+| `links.update`, `links.set_status`, `links.delete` | `PATCH`/`DELETE /api/v1/urls/{url_id}` |
+| `links.delete_all` | `DELETE /api/v1/urls?domain=` |
+| `links.claim`, `links.claim_many` | `POST /api/v1/urls/claim` |
+| `links.bulk_*` | `POST /api/v1/urls/bulk/{delete,status,expiry,domain}` |
+| `links.preview` | `GET /api/v1/public/preview/{short_code}` |
+| `links.emoji_set` | `GET /api/v1/emoji-set` |
 | `stats.query`, `stats.for_link` | `GET /api/v1/stats`, `/api/v1/stats/links/{url_id}` |
 | `stats.public` | `GET`/`POST /api/v1/public/stats/{short_code}` |
 | `stats.export`, `stats.export_link` | `GET /api/v1/export`, `/api/v1/export/links/{url_id}` |
@@ -280,7 +280,7 @@ Note on custom domains: `domain=` parameters work end to end, but custom domains
 
 ## Examples
 
-Runnable scripts in [examples/](examples/): quickstart, async usage, analytics, URL management, claim links, emoji aliases, and Sign in with Spoo.
+Runnable scripts in [examples/](examples/): quickstart, async usage, analytics, link management, claim links, emoji aliases, and Sign in with Spoo.
 
 ## Development
 

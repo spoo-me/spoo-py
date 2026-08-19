@@ -7,12 +7,12 @@ from typing import Any
 import httpx
 
 from ._base_client import _BaseClient
+from ._resources.links import AsyncLinks
 from ._resources.oauth import AsyncOAuth
 from ._resources.stats import AsyncStats
-from ._resources.urls import AsyncURLs
 from ._transport import AsyncTransport
+from .types.link import CreatedLink
 from .types.oauth import MeEnvelope, UserProfile
-from .types.url import ShortenedUrl
 
 
 class AsyncSpooClient(_BaseClient):
@@ -52,8 +52,8 @@ class AsyncSpooClient(_BaseClient):
         return await self._transport.request_json(method, path, params=params, json=json)
 
     @cached_property
-    def urls(self) -> AsyncURLs:
-        return AsyncURLs(self._transport)
+    def links(self) -> AsyncLinks:
+        return AsyncLinks(self._transport)
 
     @cached_property
     def stats(self) -> AsyncStats:
@@ -82,9 +82,9 @@ class AsyncSpooClient(_BaseClient):
         expire_after: str | int | datetime | None = None,
         private_stats: bool | None = None,
         domain: str | None = None,
-    ) -> ShortenedUrl:
+    ) -> CreatedLink:
         """Convenience: shorten a URL in one call."""
-        return await self.urls.create(
+        return await self.links.create(
             long_url,
             alias=alias,
             alias_type=alias_type,

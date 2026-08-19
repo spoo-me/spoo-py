@@ -42,7 +42,7 @@ def test_client_custom_base_url():
 
 def test_client_context_manager():
     with SpooClient(api_key="spoo_test") as client:
-        assert client.urls is not None
+        assert client.links is not None
         assert client.stats is not None
         assert client.oauth is not None
 
@@ -50,14 +50,15 @@ def test_client_context_manager():
 @pytest.mark.asyncio
 async def test_async_client_context_manager():
     async with AsyncSpooClient(api_key="spoo_test") as client:
-        assert client.urls is not None
+        assert client.links is not None
 
 
 def test_client_has_resource_namespaces():
     client = SpooClient(api_key="spoo_test")
-    assert hasattr(client, "urls")
+    assert hasattr(client, "links")
     assert hasattr(client, "stats")
     assert hasattr(client, "oauth")
+    assert not hasattr(client, "urls")
     assert not hasattr(client, "exports")
     assert not hasattr(client, "api_keys")
     assert hasattr(client, "shorten")

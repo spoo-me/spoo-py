@@ -16,21 +16,21 @@ from .._validators import (
     validate_url,
 )
 from ..types.emoji import EmojiSet
-from ..types.shared import AliasType, SortBy, SortOrder, UrlStatus, enum_value
-from ..types.url import (
+from ..types.link import (
     AliasCheck,
-    BulkDeletedUrls,
+    BulkDeletedLinks,
     BulkResult,
-    ClaimedUrls,
+    ClaimedLinks,
     ClaimResult,
-    DeletedUrl,
+    CreatedLink,
+    DeletedLink,
+    Link,
+    LinkFilter,
+    LinkPage,
     PublicPreview,
-    ShortenedUrl,
-    UpdatedUrl,
-    UrlFilter,
-    UrlListItem,
-    UrlListResponse,
+    UpdatedLink,
 )
+from ..types.shared import AliasType, LinkStatus, SortBy, SortOrder, enum_value
 from ._base import AsyncAPIResource, SyncAPIResource
 
 # ── Shared pure functions (used by both sync and async) ──────────────────
@@ -91,7 +91,7 @@ def _build_update_body(
     max_clicks: int | None,
     expire_after: str | int | datetime | None,
     private_stats: bool | None,
-    status: UrlStatus | str | None,
+    status: LinkStatus | str | None,
     domain: str | None,
 ) -> dict[str, Any]:
     if long_url is not None:
@@ -129,7 +129,7 @@ def _build_list_params(
     page_size: int,
     sort_by: SortBy | str,
     sort_order: SortOrder | str,
-    filter: UrlFilter | dict[str, Any] | None,
+    filter: LinkFilter | dict[str, Any] | None,
     domain: str | None,
 ) -> dict[str, Any]:
     params: dict[str, Any] = {
@@ -139,7 +139,7 @@ def _build_list_params(
         "sortOrder": enum_value(sort_order),
     }
     if filter is not None:
-        filter_dict = filter.to_dict() if isinstance(filter, UrlFilter) else filter
+        filter_dict = filter.to_dict() if isinstance(filter, LinkFilter) else filter
         if filter_dict:
             params["filter"] = json.dumps(filter_dict)
     if domain is not None:
@@ -156,7 +156,7 @@ def _serialize_datetime(value: str | int | datetime) -> str | int:
 # ── Async resource ───────────────────────────────────────────────────────
 
 
-class AsyncURLs(AsyncAPIResource):
+class AsyncLinks(AsyncAPIResource):
     """URL shortening and management (async)."""
 
     _emoji_set_cache: EmojiSet | None = None
@@ -173,7 +173,7 @@ class AsyncURLs(AsyncAPIResource):
         expire_after: str | int | datetime | None = None,
         private_stats: bool | None = None,
         domain: str | None = None,
-    ) -> ShortenedUrl:
+    ) -> CreatedLink:
         if alias is not None:
             if is_emoji_candidate(alias):
                 await self._validate_emoji_alias(alias)
@@ -190,13 +190,13 @@ class AsyncURLs(AsyncAPIResource):
             private_stats=private_stats,
             domain=domain,
         )
-        return await self._transport.request("POST", "/shorten", json=body, cast_to=ShortenedUrl)
+        return await self._transport.request("POST", "/shorten", json=body, cast_to=CreatedLink)
 
-    async def get(self, url_id: str) -> UrlListItem:
+    async def get(self, url_id: str) -> Link:
         """Fetch one URL you own by its id."""
-        return await self._transport.request("GET", f"/urls/{url_id}", cast_to=UrlListItem)
+        return await self._transport.request("GET", f"/urls/{url_id}", cast_to=Link)
 
-    async def get_by_alias(self, alias: str, *, domain: str | None = None) -> UrlListItem:
+    async def get_by_alias(self, alias: str, *, domain: str | None = None) -> Link:
         """Fetch one URL you own by its natural key: alias plus serving domain.
 
         ``domain`` defaults to the host of the client's base URL (the system
@@ -204,7 +204,7 @@ class AsyncURLs(AsyncAPIResource):
         """
         resolved = domain or urlparse(str(self._transport._base_url)).hostname or "spoo.me"
         return await self._transport.request(
-            "GET", f"/urls/{resolved}/{quote(alias)}", cast_to=UrlListItem
+            "GET", f"/urls/{resolved}/{quote(alias)}", cast_to=Link
         )
 
     async def claim(self, url_id: str, token: str) -> ClaimResult:
@@ -215,10 +215,10 @@ class AsyncURLs(AsyncAPIResource):
         result = await self.claim_many([(url_id, token)])
         return result.results[0]
 
-    async def claim_many(self, pairs: list[tuple[str, str]]) -> ClaimedUrls:
+    async def claim_many(self, pairs: list[tuple[str, str]]) -> ClaimedLinks:
         """Claim up to 16 anonymously created URLs, as (url_id, claim_token) pairs."""
         return await self._transport.request(
-            "POST", "/urls/claim", json=_build_claim_body(pairs), cast_to=ClaimedUrls
+            "POST", "/urls/claim", json=_build_claim_body(pairs), cast_to=ClaimedLinks
         )
 
     async def preview(self, short_code: str) -> PublicPreview:
@@ -254,7 +254,7 @@ class AsyncURLs(AsyncAPIResource):
             "POST", "/urls/bulk/delete", json={"ids": ids}, cast_to=BulkResult
         )
 
-    async def bulk_set_status(self, ids: list[str], status: UrlStatus | str) -> BulkResult:
+    async def bulk_set_status(self, ids: list[str], status: LinkStatus | str) -> BulkResult:
         """Set ACTIVE/INACTIVE on up to 100 URLs by id."""
         return await self._transport.request(
             "POST",
@@ -299,7 +299,7 @@ class AsyncURLs(AsyncAPIResource):
         page_size: int = 20,
         sort_by: SortBy | str = SortBy.CREATED_AT,
         sort_order: SortOrder | str = SortOrder.DESCENDING,
-        filter: UrlFilter | dict[str, Any] | None = None,
+        filter: LinkFilter | dict[str, Any] | None = None,
         domain: str | None = None,
     ) -> AsyncPaginator:
         params = {
@@ -319,9 +319,9 @@ class AsyncURLs(AsyncAPIResource):
         page_size: int = 20,
         sort_by: SortBy | str = SortBy.CREATED_AT,
         sort_order: SortOrder | str = SortOrder.DESCENDING,
-        filter: UrlFilter | dict[str, Any] | None = None,
+        filter: LinkFilter | dict[str, Any] | None = None,
         domain: str | None = None,
-    ) -> UrlListResponse:
+    ) -> LinkPage:
         params = _build_list_params(
             page=page,
             page_size=page_size,
@@ -330,7 +330,7 @@ class AsyncURLs(AsyncAPIResource):
             filter=filter,
             domain=domain,
         )
-        return await self._transport.request("GET", "/urls", params=params, cast_to=UrlListResponse)
+        return await self._transport.request("GET", "/urls", params=params, cast_to=LinkPage)
 
     async def update(
         self,
@@ -343,9 +343,9 @@ class AsyncURLs(AsyncAPIResource):
         max_clicks: int | None = None,
         expire_after: str | int | datetime | None = None,
         private_stats: bool | None = None,
-        status: UrlStatus | str | None = None,
+        status: LinkStatus | str | None = None,
         domain: str | None = None,
-    ) -> UpdatedUrl:
+    ) -> UpdatedLink:
         if alias is not None:
             if is_emoji_candidate(alias):
                 await self._validate_emoji_alias(alias)
@@ -363,31 +363,31 @@ class AsyncURLs(AsyncAPIResource):
             domain=domain,
         )
         return await self._transport.request(
-            "PATCH", f"/urls/{url_id}", json=body, cast_to=UpdatedUrl
+            "PATCH", f"/urls/{url_id}", json=body, cast_to=UpdatedLink
         )
 
-    async def set_status(self, url_id: str, status: UrlStatus | str) -> UpdatedUrl:
+    async def set_status(self, url_id: str, status: LinkStatus | str) -> UpdatedLink:
         return await self._transport.request(
             "PATCH",
             f"/urls/{url_id}/status",
             json={"status": enum_value(status)},
-            cast_to=UpdatedUrl,
+            cast_to=UpdatedLink,
         )
 
-    async def delete(self, url_id: str) -> DeletedUrl:
-        return await self._transport.request("DELETE", f"/urls/{url_id}", cast_to=DeletedUrl)
+    async def delete(self, url_id: str) -> DeletedLink:
+        return await self._transport.request("DELETE", f"/urls/{url_id}", cast_to=DeletedLink)
 
-    async def delete_all(self, domain: str) -> BulkDeletedUrls:
+    async def delete_all(self, domain: str) -> BulkDeletedLinks:
         """Delete every URL scoped under a custom domain."""
         return await self._transport.request(
-            "DELETE", "/urls", params={"domain": domain}, cast_to=BulkDeletedUrls
+            "DELETE", "/urls", params={"domain": domain}, cast_to=BulkDeletedLinks
         )
 
 
 # ── Sync resource ────────────────────────────────────────────────────────
 
 
-class URLs(SyncAPIResource):
+class Links(SyncAPIResource):
     """URL shortening and management (sync)."""
 
     _emoji_set_cache: EmojiSet | None = None
@@ -404,7 +404,7 @@ class URLs(SyncAPIResource):
         expire_after: str | int | datetime | None = None,
         private_stats: bool | None = None,
         domain: str | None = None,
-    ) -> ShortenedUrl:
+    ) -> CreatedLink:
         if alias is not None:
             if is_emoji_candidate(alias):
                 self._validate_emoji_alias(alias)
@@ -421,22 +421,20 @@ class URLs(SyncAPIResource):
             private_stats=private_stats,
             domain=domain,
         )
-        return self._transport.request("POST", "/shorten", json=body, cast_to=ShortenedUrl)
+        return self._transport.request("POST", "/shorten", json=body, cast_to=CreatedLink)
 
-    def get(self, url_id: str) -> UrlListItem:
+    def get(self, url_id: str) -> Link:
         """Fetch one URL you own by its id."""
-        return self._transport.request("GET", f"/urls/{url_id}", cast_to=UrlListItem)
+        return self._transport.request("GET", f"/urls/{url_id}", cast_to=Link)
 
-    def get_by_alias(self, alias: str, *, domain: str | None = None) -> UrlListItem:
+    def get_by_alias(self, alias: str, *, domain: str | None = None) -> Link:
         """Fetch one URL you own by its natural key: alias plus serving domain.
 
         ``domain`` defaults to the host of the client's base URL (the system
         domain); pass a custom domain fqdn for links scoped under one.
         """
         resolved = domain or urlparse(str(self._transport._base_url)).hostname or "spoo.me"
-        return self._transport.request(
-            "GET", f"/urls/{resolved}/{quote(alias)}", cast_to=UrlListItem
-        )
+        return self._transport.request("GET", f"/urls/{resolved}/{quote(alias)}", cast_to=Link)
 
     def claim(self, url_id: str, token: str) -> ClaimResult:
         """Claim one anonymously created URL into the authenticated account.
@@ -446,10 +444,10 @@ class URLs(SyncAPIResource):
         result = self.claim_many([(url_id, token)])
         return result.results[0]
 
-    def claim_many(self, pairs: list[tuple[str, str]]) -> ClaimedUrls:
+    def claim_many(self, pairs: list[tuple[str, str]]) -> ClaimedLinks:
         """Claim up to 16 anonymously created URLs, as (url_id, claim_token) pairs."""
         return self._transport.request(
-            "POST", "/urls/claim", json=_build_claim_body(pairs), cast_to=ClaimedUrls
+            "POST", "/urls/claim", json=_build_claim_body(pairs), cast_to=ClaimedLinks
         )
 
     def preview(self, short_code: str) -> PublicPreview:
@@ -483,7 +481,7 @@ class URLs(SyncAPIResource):
             "POST", "/urls/bulk/delete", json={"ids": ids}, cast_to=BulkResult
         )
 
-    def bulk_set_status(self, ids: list[str], status: UrlStatus | str) -> BulkResult:
+    def bulk_set_status(self, ids: list[str], status: LinkStatus | str) -> BulkResult:
         """Set ACTIVE/INACTIVE on up to 100 URLs by id."""
         return self._transport.request(
             "POST",
@@ -528,7 +526,7 @@ class URLs(SyncAPIResource):
         page_size: int = 20,
         sort_by: SortBy | str = SortBy.CREATED_AT,
         sort_order: SortOrder | str = SortOrder.DESCENDING,
-        filter: UrlFilter | dict[str, Any] | None = None,
+        filter: LinkFilter | dict[str, Any] | None = None,
         domain: str | None = None,
     ) -> SyncPaginator:
         params = {
@@ -548,9 +546,9 @@ class URLs(SyncAPIResource):
         page_size: int = 20,
         sort_by: SortBy | str = SortBy.CREATED_AT,
         sort_order: SortOrder | str = SortOrder.DESCENDING,
-        filter: UrlFilter | dict[str, Any] | None = None,
+        filter: LinkFilter | dict[str, Any] | None = None,
         domain: str | None = None,
-    ) -> UrlListResponse:
+    ) -> LinkPage:
         params = _build_list_params(
             page=page,
             page_size=page_size,
@@ -559,7 +557,7 @@ class URLs(SyncAPIResource):
             filter=filter,
             domain=domain,
         )
-        return self._transport.request("GET", "/urls", params=params, cast_to=UrlListResponse)
+        return self._transport.request("GET", "/urls", params=params, cast_to=LinkPage)
 
     def update(
         self,
@@ -572,9 +570,9 @@ class URLs(SyncAPIResource):
         max_clicks: int | None = None,
         expire_after: str | int | datetime | None = None,
         private_stats: bool | None = None,
-        status: UrlStatus | str | None = None,
+        status: LinkStatus | str | None = None,
         domain: str | None = None,
-    ) -> UpdatedUrl:
+    ) -> UpdatedLink:
         if alias is not None:
             if is_emoji_candidate(alias):
                 self._validate_emoji_alias(alias)
@@ -591,21 +589,21 @@ class URLs(SyncAPIResource):
             status=status,
             domain=domain,
         )
-        return self._transport.request("PATCH", f"/urls/{url_id}", json=body, cast_to=UpdatedUrl)
+        return self._transport.request("PATCH", f"/urls/{url_id}", json=body, cast_to=UpdatedLink)
 
-    def set_status(self, url_id: str, status: UrlStatus | str) -> UpdatedUrl:
+    def set_status(self, url_id: str, status: LinkStatus | str) -> UpdatedLink:
         return self._transport.request(
             "PATCH",
             f"/urls/{url_id}/status",
             json={"status": enum_value(status)},
-            cast_to=UpdatedUrl,
+            cast_to=UpdatedLink,
         )
 
-    def delete(self, url_id: str) -> DeletedUrl:
-        return self._transport.request("DELETE", f"/urls/{url_id}", cast_to=DeletedUrl)
+    def delete(self, url_id: str) -> DeletedLink:
+        return self._transport.request("DELETE", f"/urls/{url_id}", cast_to=DeletedLink)
 
-    def delete_all(self, domain: str) -> BulkDeletedUrls:
+    def delete_all(self, domain: str) -> BulkDeletedLinks:
         """Delete every URL scoped under a custom domain."""
         return self._transport.request(
-            "DELETE", "/urls", params={"domain": domain}, cast_to=BulkDeletedUrls
+            "DELETE", "/urls", params={"domain": domain}, cast_to=BulkDeletedLinks
         )

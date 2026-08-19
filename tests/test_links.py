@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from spoo import DeletedUrl, ShortenedUrl, UpdatedUrl, UrlListResponse
+from spoo import CreatedLink, DeletedLink, LinkPage, UpdatedLink
 
 BASE_URL = "https://spoo.me/api/v1"
 
@@ -55,8 +55,8 @@ DELETE_RESPONSE = {
 @pytest.mark.asyncio
 async def test_create_url(mock_api, async_client):
     mock_api.post("/shorten").mock(return_value=httpx.Response(201, json=SHORTEN_RESPONSE))
-    url = await async_client.urls.create("https://example.com/long", alias="mylink")
-    assert isinstance(url, ShortenedUrl)
+    url = await async_client.links.create("https://example.com/long", alias="mylink")
+    assert isinstance(url, CreatedLink)
     assert url.alias == "mylink"
     assert url.short_url == "https://spoo.me/mylink"
     assert url.created_at == 1704067200
@@ -65,7 +65,7 @@ async def test_create_url(mock_api, async_client):
 @pytest.mark.asyncio
 async def test_create_url_with_all_params(mock_api, async_client):
     mock_api.post("/shorten").mock(return_value=httpx.Response(201, json=SHORTEN_RESPONSE))
-    url = await async_client.urls.create(
+    url = await async_client.links.create(
         "https://example.com/long",
         alias="mylink",
         password="Secure@123",
@@ -94,8 +94,8 @@ async def test_shorten_convenience(mock_api, async_client):
 @pytest.mark.asyncio
 async def test_list_page(mock_api, async_client):
     mock_api.get("/urls").mock(return_value=httpx.Response(200, json=LIST_RESPONSE))
-    page = await async_client.urls.list_page()
-    assert isinstance(page, UrlListResponse)
+    page = await async_client.links.list_page()
+    assert isinstance(page, LinkPage)
     assert len(page.items) == 1
     assert page.items[0].alias == "mylink"
     assert page.total == 1
@@ -106,7 +106,7 @@ async def test_list_page(mock_api, async_client):
 async def test_list_auto_paginate(mock_api, async_client):
     mock_api.get("/urls").mock(return_value=httpx.Response(200, json=LIST_RESPONSE))
     items = []
-    async for url in async_client.urls.list():
+    async for url in async_client.links.list():
         items.append(url)
     assert len(items) == 1
     assert items[0].alias == "mylink"
@@ -115,10 +115,10 @@ async def test_list_auto_paginate(mock_api, async_client):
 @pytest.mark.asyncio
 async def test_update_url(mock_api, async_client):
     mock_api.patch("/urls/abc123").mock(return_value=httpx.Response(200, json=UPDATE_RESPONSE))
-    result = await async_client.urls.update(
+    result = await async_client.links.update(
         "abc123", long_url="https://example.com/updated", alias="newlink"
     )
-    assert isinstance(result, UpdatedUrl)
+    assert isinstance(result, UpdatedLink)
     assert result.alias == "newlink"
 
 
@@ -127,30 +127,30 @@ async def test_set_status(mock_api, async_client):
     mock_api.patch("/urls/abc123/status").mock(
         return_value=httpx.Response(200, json=UPDATE_RESPONSE)
     )
-    result = await async_client.urls.set_status("abc123", "ACTIVE")
-    assert isinstance(result, UpdatedUrl)
+    result = await async_client.links.set_status("abc123", "ACTIVE")
+    assert isinstance(result, UpdatedLink)
 
 
 @pytest.mark.asyncio
 async def test_delete_url(mock_api, async_client):
     mock_api.delete("/urls/abc123").mock(return_value=httpx.Response(200, json=DELETE_RESPONSE))
-    result = await async_client.urls.delete("abc123")
-    assert isinstance(result, DeletedUrl)
+    result = await async_client.links.delete("abc123")
+    assert isinstance(result, DeletedLink)
     assert result.id == "abc123"
 
 
 def test_url_filter_serializes_enum_status():
-    from spoo import UrlFilter, UrlStatus
+    from spoo import LinkFilter, LinkStatus
 
-    assert UrlFilter(status=UrlStatus.ACTIVE).to_dict() == {"status": "ACTIVE"}
-    assert UrlFilter(status="INACTIVE").to_dict() == {"status": "INACTIVE"}
+    assert LinkFilter(status=LinkStatus.ACTIVE).to_dict() == {"status": "ACTIVE"}
+    assert LinkFilter(status="INACTIVE").to_dict() == {"status": "INACTIVE"}
 
 
 @pytest.mark.asyncio
 async def test_list_honors_start_page(mock_api, async_client):
     page2 = {**LIST_RESPONSE, "page": 2}
     mock_api.get("/urls").mock(return_value=httpx.Response(200, json=page2))
-    items = [url async for url in async_client.urls.list(page=2)]
+    items = [url async for url in async_client.links.list(page=2)]
     assert len(items) == 1
     assert "page=2" in str(mock_api.calls[0].request.url)
 
@@ -169,7 +169,7 @@ async def test_shorten_convenience_full_params(mock_api, async_client):
 @pytest.mark.asyncio
 async def test_create_with_custom_domain(mock_api, async_client):
     mock_api.post("/shorten").mock(return_value=httpx.Response(201, json=SHORTEN_RESPONSE))
-    await async_client.urls.create("https://example.com", domain="links.acme.com")
+    await async_client.links.create("https://example.com", domain="links.acme.com")
     import json
 
     body = json.loads(mock_api.calls[0].request.content)
@@ -183,7 +183,7 @@ async def test_check_alias(mock_api, async_client):
     mock_api.get("/shorten/check-alias").mock(
         return_value=httpx.Response(200, json={"available": False, "reason": "taken"})
     )
-    result = await async_client.urls.check_alias("mylink", domain="links.acme.com")
+    result = await async_client.links.check_alias("mylink", domain="links.acme.com")
     assert isinstance(result, AliasCheck)
     assert result.available is False
     assert result.reason == "taken"
@@ -194,7 +194,7 @@ async def test_check_alias(mock_api, async_client):
 
 @pytest.mark.asyncio
 async def test_delete_all_by_domain(mock_api, async_client):
-    from spoo import BulkDeletedUrls
+    from spoo import BulkDeletedLinks
 
     mock_api.delete("/urls").mock(
         return_value=httpx.Response(
@@ -206,8 +206,8 @@ async def test_delete_all_by_domain(mock_api, async_client):
             },
         )
     )
-    result = await async_client.urls.delete_all("links.acme.com")
-    assert isinstance(result, BulkDeletedUrls)
+    result = await async_client.links.delete_all("links.acme.com")
+    assert isinstance(result, BulkDeletedLinks)
     assert result.count == 42
     assert "domain=links.acme.com" in str(mock_api.calls[0].request.url)
 
@@ -215,7 +215,7 @@ async def test_delete_all_by_domain(mock_api, async_client):
 @pytest.mark.asyncio
 async def test_list_page_domain_param(mock_api, async_client):
     mock_api.get("/urls").mock(return_value=httpx.Response(200, json=LIST_RESPONSE))
-    await async_client.urls.list_page(domain="links.acme.com")
+    await async_client.links.list_page(domain="links.acme.com")
     assert "domain=links.acme.com" in str(mock_api.calls[0].request.url)
 
 

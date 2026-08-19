@@ -8,7 +8,7 @@ def enum_value(v: Enum | str) -> str:
     return v.value if isinstance(v, Enum) else str(v)
 
 
-class UrlStatus(str, Enum):
+class LinkStatus(str, Enum):
     ACTIVE = "ACTIVE"
     INACTIVE = "INACTIVE"
 

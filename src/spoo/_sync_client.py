@@ -7,12 +7,12 @@ from typing import Any
 import httpx
 
 from ._base_client import _BaseClient
+from ._resources.links import Links
 from ._resources.oauth import OAuth
 from ._resources.stats import Stats
-from ._resources.urls import URLs
 from ._transport import SyncTransport
+from .types.link import CreatedLink
 from .types.oauth import MeEnvelope, UserProfile
-from .types.url import ShortenedUrl
 
 
 class SpooClient(_BaseClient):
@@ -52,8 +52,8 @@ class SpooClient(_BaseClient):
         return self._transport.request_json(method, path, params=params, json=json)
 
     @cached_property
-    def urls(self) -> URLs:
-        return URLs(self._transport)
+    def links(self) -> Links:
+        return Links(self._transport)
 
     @cached_property
     def stats(self) -> Stats:
@@ -80,9 +80,9 @@ class SpooClient(_BaseClient):
         expire_after: str | int | datetime | None = None,
         private_stats: bool | None = None,
         domain: str | None = None,
-    ) -> ShortenedUrl:
+    ) -> CreatedLink:
         """Convenience: shorten a URL in one call."""
-        return self.urls.create(
+        return self.links.create(
             long_url,
             alias=alias,
             alias_type=alias_type,

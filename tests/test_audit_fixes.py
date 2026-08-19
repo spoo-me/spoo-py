@@ -52,7 +52,7 @@ def test_http_date_retry_after_does_not_crash(mock_api):
         )
     )
     with pytest.raises(RateLimitError) as exc_info:  # not ValueError
-        client.urls.get("abc")
+        client.links.get("abc")
     assert exc_info.value.retry_after == 0.0
 
 
@@ -66,7 +66,7 @@ def test_edge_composed_error_uses_header_code_and_clean_message(mock_api):
         )
     )
     with pytest.raises(ContentBlockedError) as exc_info:
-        client.urls.get("abc")
+        client.links.get("abc")
     err = exc_info.value
     assert err.error_code == "blocked"
     assert err.message == "HTTP 451"  # never the raw HTML
@@ -77,10 +77,10 @@ def test_new_status_classes(mock_api):
     client = SpooClient(api_key="spoo_test", base_url="https://spoo.me/api/v1", max_retries=0)
     mock_api.get("/urls/a").mock(return_value=httpx.Response(413, json={"error": "too big"}))
     with pytest.raises(PayloadTooLargeError):
-        client.urls.get("a")
+        client.links.get("a")
     mock_api.get("/urls/b").mock(return_value=httpx.Response(503, json={"error": "down"}))
     with pytest.raises(ServiceUnavailableError):
-        client.urls.get("b")
+        client.links.get("b")
 
 
 @pytest.mark.asyncio
@@ -143,7 +143,7 @@ async def test_public_preview(mock_api, async_client):
             },
         )
     )
-    preview = await async_client.urls.preview("mylink")
+    preview = await async_client.links.preview("mylink")
     assert isinstance(preview, PublicPreview)
     assert preview.destination is not None
     assert preview.destination.domain == "example.com"

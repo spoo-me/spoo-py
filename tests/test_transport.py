@@ -23,7 +23,7 @@ RESP_429 = httpx.Response(
 async def test_rate_limit_error_carries_headers(mock_api, async_client):
     mock_api.get("/urls/abc").mock(return_value=RESP_429)
     with pytest.raises(RateLimitError) as exc_info:
-        await async_client.urls.get("abc")
+        await async_client.links.get("abc")
     err = exc_info.value
     assert err.retry_after == 0.0
     assert err.limit == 5
@@ -39,7 +39,7 @@ async def test_get_retries_on_500(mock_api, async_client):
             httpx.Response(200, json={"id": "abc", "password_set": False}),
         ]
     )
-    item = await async_client.urls.get("abc")
+    item = await async_client.links.get("abc")
     assert item.id == "abc"
     assert route.call_count == 2
 
@@ -48,7 +48,7 @@ async def test_get_retries_on_500(mock_api, async_client):
 async def test_post_does_not_retry_on_500(mock_api, async_client):
     route = mock_api.post("/shorten").mock(return_value=httpx.Response(500, json={"error": "x"}))
     with pytest.raises(InternalServerError):
-        await async_client.urls.create("https://example.com")
+        await async_client.links.create("https://example.com")
     assert route.call_count == 1  # non-idempotent: the server may have done work
 
 
@@ -69,6 +69,21 @@ async def test_post_retries_on_429(mock_api, async_client):
             ),
         ]
     )
-    url = await async_client.urls.create("https://example.com")
+    url = await async_client.links.create("https://example.com")
     assert url.alias == "x"
     assert route.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_retry_after_above_ceiling_raises_immediately(mock_api, async_client):
+    route = mock_api.get("/urls/abc").mock(
+        return_value=httpx.Response(
+            429,
+            json={"error": "limited", "code": "rate_limit_exceeded"},
+            headers={"Retry-After": "3600"},
+        )
+    )
+    with pytest.raises(RateLimitError) as exc_info:
+        await async_client.links.get("abc")
+    assert route.call_count == 1  # not worth sleeping an hour inline
+    assert exc_info.value.retry_after == 3600.0  # the caller can schedule it

@@ -127,8 +127,8 @@ def test_dynamic_bearer_resolved_per_request(mock_api):
     mock_api.get("/urls/abc").mock(
         return_value=httpx.Response(200, json={"id": "abc", "password_set": False})
     )
-    client.urls.get("abc")
-    client.urls.get("abc")
+    client.links.get("abc")
+    client.links.get("abc")
     assert len(calls) == 2
     assert mock_api.calls[1].request.headers["Authorization"] == "Bearer tok-2"
 
@@ -170,5 +170,5 @@ async def test_async_token_provider(mock_site):
         api.get("/urls/abc").mock(
             return_value=httpx.Response(200, json={"id": "abc", "password_set": False})
         )
-        await authed.urls.get("abc")
+        await authed.links.get("abc")
         assert api.calls[0].request.headers["Authorization"] == f"Bearer {fresh}"

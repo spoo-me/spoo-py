@@ -7,7 +7,7 @@ import json
 import httpx
 import pytest
 
-from spoo import AliasType, BulkResult, ClaimedUrls, EmojiSet, UrlListItem
+from spoo import AliasType, BulkResult, ClaimedLinks, EmojiSet, Link
 from spoo._validators import canonicalize_emoji, validate_emoji_alias
 
 ITEM = {"id": "a" * 24, "alias": "mylink", "password_set": False}
@@ -39,19 +39,19 @@ BULK_OK = {
 @pytest.mark.asyncio
 async def test_get_by_id(mock_api, async_client):
     mock_api.get(f"/urls/{'a' * 24}").mock(return_value=httpx.Response(200, json=ITEM))
-    item = await async_client.urls.get("a" * 24)
-    assert isinstance(item, UrlListItem)
+    item = await async_client.links.get("a" * 24)
+    assert isinstance(item, Link)
     assert item.alias == "mylink"
 
 
 @pytest.mark.asyncio
 async def test_get_by_alias_defaults_domain_from_base_url(mock_api, async_client):
     mock_api.get("/urls/spoo.me/mylink").mock(return_value=httpx.Response(200, json=ITEM))
-    item = await async_client.urls.get_by_alias("mylink")
+    item = await async_client.links.get_by_alias("mylink")
     assert item.id == "a" * 24
 
     mock_api.get("/urls/links.acme.com/mylink").mock(return_value=httpx.Response(200, json=ITEM))
-    await async_client.urls.get_by_alias("mylink", domain="links.acme.com")
+    await async_client.links.get_by_alias("mylink", domain="links.acme.com")
 
 
 @pytest.mark.asyncio
@@ -61,7 +61,7 @@ async def test_claim_single_sends_token_field(mock_api, async_client):
             200, json={"results": [{"url_id": "a" * 24, "status": "claimed"}], "claimed": 1}
         )
     )
-    result = await async_client.urls.claim("a" * 24, "t" * 43)
+    result = await async_client.links.claim("a" * 24, "t" * 43)
     body = json.loads(route.calls[0].request.content)
     # Wire field is `token` (NOT claim_token — the backend defines no alias)
     assert body == {"claims": [{"url_id": "a" * 24, "token": "t" * 43}]}
@@ -82,8 +82,8 @@ async def test_claim_many(mock_api, async_client):
             },
         )
     )
-    result = await async_client.urls.claim_many([("a" * 24, "t" * 43), ("b" * 24, "u" * 43)])
-    assert isinstance(result, ClaimedUrls)
+    result = await async_client.links.claim_many([("a" * 24, "t" * 43), ("b" * 24, "u" * 43)])
+    assert isinstance(result, ClaimedLinks)
     assert result.claimed == 1
     assert [r.status for r in result.results] == ["claimed", "invalid"]
 
@@ -94,10 +94,10 @@ async def test_bulk_operations(mock_api, async_client):
     for op in ("delete", "status", "expiry", "domain"):
         mock_api.post(f"/urls/bulk/{op}").mock(return_value=httpx.Response(200, json=BULK_OK))
 
-    assert isinstance(await async_client.urls.bulk_delete(ids), BulkResult)
-    await async_client.urls.bulk_set_status(ids, "INACTIVE")
-    await async_client.urls.bulk_set_expiry(ids, None)
-    await async_client.urls.bulk_set_domain(ids, "links.acme.com")
+    assert isinstance(await async_client.links.bulk_delete(ids), BulkResult)
+    await async_client.links.bulk_set_status(ids, "INACTIVE")
+    await async_client.links.bulk_set_expiry(ids, None)
+    await async_client.links.bulk_set_domain(ids, "links.acme.com")
 
     status_body = json.loads(mock_api.calls[1].request.content)
     assert status_body == {"ids": ids, "status": "INACTIVE"}
@@ -110,21 +110,21 @@ async def test_create_emoji_alias_validated_against_cached_set(mock_api, async_c
     set_route = mock_api.get("/emoji-set").mock(return_value=httpx.Response(200, json=EMOJI_SET))
     mock_api.post("/shorten").mock(return_value=httpx.Response(201, json=SHORTEN))
 
-    await async_client.urls.create("https://example.com", alias="🚀🔥")
-    await async_client.urls.create("https://example.com", alias="🔥")
+    await async_client.links.create("https://example.com", alias="🚀🔥")
+    await async_client.links.create("https://example.com", alias="🔥")
     assert set_route.call_count == 1  # cached after the first fetch
 
     with pytest.raises(ValueError, match="not in the accepted emoji set"):
-        await async_client.urls.create("https://example.com", alias="🚀💩")
+        await async_client.links.create("https://example.com", alias="🚀💩")
     with pytest.raises(ValueError, match="limited to 3 emoji"):
-        await async_client.urls.create("https://example.com", alias="🚀🔥🚀🔥")
+        await async_client.links.create("https://example.com", alias="🚀🔥🚀🔥")
 
 
 @pytest.mark.asyncio
 async def test_emoji_validation_fails_open_when_set_unavailable(mock_api, async_client):
     mock_api.get("/emoji-set").mock(return_value=httpx.Response(500, json={"error": "boom"}))
     mock_api.post("/shorten").mock(return_value=httpx.Response(201, json=SHORTEN))
-    url = await async_client.urls.create("https://example.com", alias="🚀")
+    url = await async_client.links.create("https://example.com", alias="🚀")
     assert url.alias == "mylink"  # server decided; client did not block
 
 
@@ -143,7 +143,7 @@ def test_validate_emoji_alias_pure():
 @pytest.mark.asyncio
 async def test_alias_type_passthrough(mock_api, async_client):
     route = mock_api.post("/shorten").mock(return_value=httpx.Response(201, json=SHORTEN))
-    await async_client.urls.create("https://example.com", alias_type=AliasType.EMOJI)
+    await async_client.links.create("https://example.com", alias_type=AliasType.EMOJI)
     body = json.loads(route.calls[0].request.content)
     assert body["alias_type"] == "emoji"
 
@@ -151,7 +151,7 @@ async def test_alias_type_passthrough(mock_api, async_client):
 @pytest.mark.asyncio
 async def test_emoji_set_model(mock_api, async_client):
     mock_api.get("/emoji-set").mock(return_value=httpx.Response(200, json=EMOJI_SET))
-    es = await async_client.urls.emoji_set()
+    es = await async_client.links.emoji_set()
     assert isinstance(es, EmojiSet)
     assert es.max_graphemes == 3
     assert es.emoji[0].n == "rocket"

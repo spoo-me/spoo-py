@@ -10,6 +10,7 @@ from ._auth import AuthStrategy, DynamicBearerAuth
 from ._constants import (
     CLIENT_TAG,
     INITIAL_RETRY_DELAY,
+    MAX_HONORED_RETRY_AFTER,
     MAX_RETRY_DELAY,
     NONIDEMPOTENT_RETRYABLE_STATUS_CODES,
     RETRYABLE_STATUS_CODES,
@@ -99,6 +100,10 @@ class BaseTransport:
     ) -> bool:
         if attempt >= retries:
             return False
+        if response.status_code == 429:
+            retry_after = parse_retry_after(response.headers.get("Retry-After"))
+            if retry_after is not None and retry_after > MAX_HONORED_RETRY_AFTER:
+                return False  # raise now; the caller can schedule the long wait
         if method in _IDEMPOTENT_METHODS:
             return response.status_code in RETRYABLE_STATUS_CODES
         # Non-idempotent: retry only when the server provably did no work.

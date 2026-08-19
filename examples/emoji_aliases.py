@@ -16,7 +16,7 @@ def main() -> None:
         print(f"generated : {url.short_url}")
 
         # Pick your own; the SDK checks it against the accepted set first
-        check = client.urls.check_alias("🚀🔥")
+        check = client.links.check_alias("🚀🔥")
         if check.available:
             url = client.shorten("https://example.com", alias="🚀🔥")
             print(f"custom    : {url.short_url}")
@@ -24,7 +24,7 @@ def main() -> None:
             print(f"🚀🔥 unavailable: {check.reason}")
 
         # The catalogue itself, e.g. to build a picker
-        emoji_set = client.urls.emoji_set()
+        emoji_set = client.links.emoji_set()
         rockets = [e for e in emoji_set.emoji if "rocket" in e.n]
         print(
             f"catalogue : {len(emoji_set.emoji)} emoji, "

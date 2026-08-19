@@ -47,7 +47,7 @@ def test_injected_http_client_is_used_and_not_closed():
 
     injected = httpx.Client(transport=httpx.MockTransport(handler))
     with SpooClient(api_key="spoo_test", http_client=injected) as client:
-        client.urls.get("a" * 24)
+        client.links.get("a" * 24)
     assert seen == [f"https://spoo.me/api/v1/urls/{'a' * 24}"]
     assert not injected.is_closed  # caller owns it; the SDK must not close it
     injected.close()
@@ -79,7 +79,7 @@ async def test_async_injected_client():
 
     injected = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     async with AsyncSpooClient(api_key="spoo_test", http_client=injected) as client:
-        item = await client.urls.get("a" * 24)
+        item = await client.links.get("a" * 24)
         assert item.alias == "mylink"
     assert not injected.is_closed
     await injected.aclose()

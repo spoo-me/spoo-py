@@ -55,7 +55,7 @@ def main() -> None:
         with SpooClient(bearer_token=provider) as client:
             user = client.me()
             print(f"signed in as {user.email} ({user.plan})")
-            for item in client.urls.list(page_size=5):
+            for item in client.links.list(page_size=5):
                 print(f"  {item.alias}: {item.total_clicks or 0} clicks")
     except SessionExpiredError:
         TOKENS_FILE.unlink(missing_ok=True)
