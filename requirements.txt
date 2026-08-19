@@ -1,5 +1,0 @@
-matplotlib
-requests
-geopandas
-pandas
-openpyxl
