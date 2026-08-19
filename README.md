@@ -45,6 +45,8 @@ client = SpooClient(bearer_token=...)    # a JWT, or a callable returning one
 
 Anonymous clients work under anonymous limits. Create API keys from your spoo.me dashboard. Self-hosting? Point `base_url` (or `SPOO_BASE_URL`) at your instance's `/api/v1`.
 
+Note that the base URL is a security boundary: every request, credential, and server-suggested filename flows through whatever it points at. Prefer the explicit `base_url` argument in anything security-sensitive, since the environment variable can redirect a whole process without any call site showing it.
+
 Async is the same surface with `AsyncSpooClient`, `await`, and `async for`.
 
 ## Links
@@ -230,6 +232,33 @@ except ValidationError as e:
 except RateLimitError as e:
     print(f"limited, window resets at {e.reset}")
 ```
+
+## Scope
+
+The SDK covers the data plane a third-party integration builds against: links (create, manage, bulk, claim, emoji aliases), analytics (account, per-link, public, exports), the public preview, and Sign in with Spoo plus the read-only identity check.
+
+Deliberately out of scope: API key management, account and profile lifecycle, `/contact`, `/health`, and all legacy (pre-v1) endpoints. Feature-gated surfaces (custom domains management, webhooks, geo rules, meta tags) are not wrapped while they are not generally available, except the `domain` parameters which pass through.
+
+| Method | Endpoint |
+| --- | --- |
+| `shorten`, `urls.create` | `POST /api/v1/shorten` |
+| `urls.check_alias` | `GET /api/v1/shorten/check-alias` |
+| `urls.list`, `urls.list_page` | `GET /api/v1/urls` |
+| `urls.get` | `GET /api/v1/urls/{url_id}` |
+| `urls.get_by_alias` | `GET /api/v1/urls/{domain}/{alias}` |
+| `urls.update`, `urls.set_status`, `urls.delete` | `PATCH`/`DELETE /api/v1/urls/{url_id}` |
+| `urls.delete_all` | `DELETE /api/v1/urls?domain=` |
+| `urls.claim`, `urls.claim_many` | `POST /api/v1/urls/claim` |
+| `urls.bulk_*` | `POST /api/v1/urls/bulk/{delete,status,expiry,domain}` |
+| `urls.preview` | `GET /api/v1/public/preview/{short_code}` |
+| `urls.emoji_set` | `GET /api/v1/emoji-set` |
+| `stats.query`, `stats.for_link` | `GET /api/v1/stats`, `/api/v1/stats/links/{url_id}` |
+| `stats.public` | `GET`/`POST /api/v1/public/stats/{short_code}` |
+| `stats.export`, `stats.export_link` | `GET /api/v1/export`, `/api/v1/export/links/{url_id}` |
+| `oauth.*` | `/auth/device/{token,refresh}` |
+| `me` | `GET /auth/me` |
+
+For anything not listed, `client.request(method, path, params=, json=)` is the supported escape hatch: it applies the client's auth, retries, and error mapping, and returns the parsed JSON. If you need it, the surface has a gap worth [filing](https://github.com/spoo-me/spoo-py/issues).
 
 ## Retries and configuration
 

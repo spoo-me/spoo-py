@@ -24,6 +24,24 @@ _FILENAME_STAR_RE = re.compile(r"filename\*=utf-8''([^;]+)", re.IGNORECASE)
 _FILENAME_RE = re.compile(r'filename="?([^";]+)"?', re.IGNORECASE)
 
 
+def _sanitize_filename(name: str | None) -> str | None:
+    """Reduce a wire-supplied filename to a bare, safe basename.
+
+    The header comes from whatever the base URL points at, and consumers use
+    the result as a path. Traversal, absolute paths, and separator smuggling
+    must die here, in the SDK, not in every consumer.
+    """
+    if not name:
+        return None
+    # Take the last segment across both separator conventions.
+    for sep in ("/", "\\"):
+        name = name.rsplit(sep, 1)[-1]
+    name = name.strip()
+    if name in ("", ".", "..") or name.startswith("~"):
+        return None
+    return name
+
+
 def _export_file(response: httpx.Response) -> ExportFile:
     disposition = response.headers.get("Content-Disposition", "")
     match = _FILENAME_STAR_RE.search(disposition)
@@ -33,7 +51,7 @@ def _export_file(response: httpx.Response) -> ExportFile:
         filename = plain.group(1) if plain else None
     return ExportFile(
         response.content,
-        filename=filename,
+        filename=_sanitize_filename(filename),
         content_type=response.headers.get("Content-Type"),
     )
 

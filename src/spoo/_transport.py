@@ -42,6 +42,12 @@ class BaseTransport:
         self._auth = auth
         self._max_retries = max_retries
         self._custom_headers = custom_headers
+        self._owns_client = True
+
+    def _url(self, path: str) -> str:
+        if "://" in path:
+            return path
+        return f"{self._base_url.rstrip('/')}{path}"
 
     def _build_headers(
         self, *, with_json: bool = False, authenticated: bool = True
@@ -99,9 +105,19 @@ class BaseTransport:
 class AsyncTransport(BaseTransport):
     """Async HTTP transport using httpx.AsyncClient."""
 
-    def __init__(self, *, timeout: httpx.Timeout, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *,
+        timeout: httpx.Timeout,
+        http_client: httpx.AsyncClient | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
-        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=timeout)
+        if http_client is not None:
+            self._client = http_client
+            self._owns_client = False
+        else:
+            self._client = httpx.AsyncClient(timeout=timeout)
 
     async def request(
         self,
@@ -127,6 +143,19 @@ class AsyncTransport(BaseTransport):
         params: dict[str, Any] | None = None,
     ) -> httpx.Response:
         return await self._send_with_retry(method, path, params=params)
+
+    async def request_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+    ) -> Any:
+        response = await self._send_with_retry(method, path, json=json, params=params)
+        if not response.content:
+            return None
+        return response.json()
 
     async def _resolve_auth(self, headers: dict[str, str]) -> dict[str, str]:
         if isinstance(self._auth, DynamicBearerAuth) and "Authorization" not in headers:
@@ -157,7 +186,7 @@ class AsyncTransport(BaseTransport):
                 headers = await self._resolve_auth(headers)
             try:
                 response = await self._client.request(
-                    method, path, headers=headers, json=json, params=params
+                    method, self._url(path), headers=headers, json=json, params=params
                 )
             except httpx.TimeoutException as exc:
                 if self._should_retry_connection(method, attempt, max_retries):
@@ -182,15 +211,26 @@ class AsyncTransport(BaseTransport):
         raise AssertionError("unreachable")  # pragma: no cover
 
     async def close(self) -> None:
-        await self._client.aclose()
+        if self._owns_client:
+            await self._client.aclose()
 
 
 class SyncTransport(BaseTransport):
     """Sync HTTP transport using httpx.Client. No background threads needed."""
 
-    def __init__(self, *, timeout: httpx.Timeout, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *,
+        timeout: httpx.Timeout,
+        http_client: httpx.Client | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
-        self._client = httpx.Client(base_url=self._base_url, timeout=timeout)
+        if http_client is not None:
+            self._client = http_client
+            self._owns_client = False
+        else:
+            self._client = httpx.Client(timeout=timeout)
 
     def request(
         self,
@@ -216,6 +256,19 @@ class SyncTransport(BaseTransport):
         params: dict[str, Any] | None = None,
     ) -> httpx.Response:
         return self._send_with_retry(method, path, params=params)
+
+    def request_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+    ) -> Any:
+        response = self._send_with_retry(method, path, json=json, params=params)
+        if not response.content:
+            return None
+        return response.json()
 
     def _resolve_auth(self, headers: dict[str, str]) -> dict[str, str]:
         if isinstance(self._auth, DynamicBearerAuth) and "Authorization" not in headers:
@@ -244,7 +297,7 @@ class SyncTransport(BaseTransport):
                 headers = self._resolve_auth(headers)
             try:
                 response = self._client.request(
-                    method, path, headers=headers, json=json, params=params
+                    method, self._url(path), headers=headers, json=json, params=params
                 )
             except httpx.TimeoutException as exc:
                 if self._should_retry_connection(method, attempt, max_retries):
@@ -269,4 +322,5 @@ class SyncTransport(BaseTransport):
         raise AssertionError("unreachable")  # pragma: no cover
 
     def close(self) -> None:
-        self._client.close()
+        if self._owns_client:
+            self._client.close()

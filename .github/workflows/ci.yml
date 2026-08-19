@@ -52,3 +52,16 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync
       - run: uv run mypy src/spoo/ --ignore-missing-imports
+
+  spec-drift:
+    name: Spec Drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare the vendored spec against the backend's
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/spoo-me/spoo/main/openapi.json -o /tmp/upstream.json
+          diff -q openapi.json /tmp/upstream.json || {
+            echo "::error::openapi.json has drifted from spoo-me/spoo main; review the API change and update the vendored spec"
+            exit 1
+          }

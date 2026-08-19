@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from functools import cached_property
+from typing import Any
+
+import httpx
 
 from ._base_client import _BaseClient
 from ._resources.oauth import OAuth
@@ -21,7 +24,7 @@ class SpooClient(_BaseClient):
         url = client.shorten("https://example.com")
     """
 
-    def __init__(self, **kwargs) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, *, http_client: httpx.Client | None = None, **kwargs) -> None:  # type: ignore[no-untyped-def]
         super().__init__(**kwargs)
         self._transport = SyncTransport(
             base_url=self._base_url,
@@ -29,7 +32,24 @@ class SpooClient(_BaseClient):
             timeout=self._timeout,
             max_retries=self._max_retries,
             custom_headers=self._custom_headers,
+            http_client=http_client,
         )
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+    ) -> Any:
+        """Escape hatch: call any API path with the client's auth, retries,
+        and error mapping applied. Returns the parsed JSON body.
+
+        ``path`` is relative to the base URL (``"/urls"``) or absolute. If
+        you reach for this, the SDK has a coverage gap worth filing.
+        """
+        return self._transport.request_json(method, path, params=params, json=json)
 
     @cached_property
     def urls(self) -> URLs:
