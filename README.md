@@ -1,277 +1,266 @@
-<p align=center>
-    <img src="https://raw.githubusercontent.com/spoo-me/py_spoo_url/main/assets/py_spoo_url.png" height="50px" alt="py_spoo_url banner">
-</p>
+# spoo
 
+The official Python SDK for the [spoo.me](https://spoo.me) URL shortener API.
 
-### 🚀 Simple URL shortening with advanced analytics, emoji aliases, and more using spoo.me
+[![CI](https://img.shields.io/github/actions/workflow/status/spoo-me/spoo-py/ci.yml?branch=main&label=CI)](https://github.com/spoo-me/spoo-py/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/spoo)](https://pypi.org/project/spoo/)
+[![Python](https://img.shields.io/pypi/pyversions/spoo)](https://pypi.org/project/spoo/)
+[![Codecov](https://img.shields.io/codecov/c/github/spoo-me/spoo-py)](https://codecov.io/gh/spoo-me/spoo-py)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-<br>
+```python
+from spoo import SpooClient
 
-<details>
-<summary>📖 Table of Contents</summary>
+client = SpooClient()
+print(client.shorten("https://example.com").short_url)
+```
 
-- [📦 Installing](#-installing)
-- [📥 Importing](#-importing)
-- [✂️ Shortening URL](#️-shortening-url)
-  - [For Non-emoji aliases](#for-non-emoji-aliases)
-  - [😎 For Emoji aliases](#-for-emoji-aliases)
-- [📊 URL Statistics](#-url-statistics)
-  - [🔧 Initializing the class](#-initializing-the-class)
-  - [👀 Viewing the Basic Statistics](#-viewing-the-basic-statistics)
-  - [](#)
-    - [Example Usage](#example-usage)
-  - [📈 Generating Insightful Charts](#-generating-insightful-charts)
-  - [](#-1)
-    - [Valid Data that can be passed to make the chart](#valid-data-that-can-be-passed-to-make-the-chart)
-    - [Valid Chart types](#valid-chart-types)
-    - [Usage Example](#usage-example)
-    - [👀 Heatmap Preview](#-heatmap-preview)
-- [📤 Exporting Stats Data](#-exporting-stats-data)
-- [🧳 Dependencies](#-dependencies)
-- [🚨 Error Codes](#-error-codes)
-- [🤝 Support and Issues](#-support-and-issues)
-- [🤗 Contributing](#-contributing)
-- [📜 Licence](#-licence)
+- Sync and async clients with the same API
+- Fully typed: every response is a Pydantic model, `py.typed` included
+- Sign in with Spoo (PKCE device auth) with automatic token refresh
+- Automatic, idempotency-aware retries
+- Auto-pagination for list endpoints
+- Two runtime dependencies: `httpx` and `pydantic`
 
-</details>
+Migrating from `py_spoo_url`? See [MIGRATION.md](MIGRATION.md).
 
----
-
-## 📦 Installing
-
-You can install this package using pip:
+## Install
 
 ```bash
-pip install py_spoo_url
+pip install spoo
+# or
+uv add spoo
 ```
 
----
+Requires Python 3.10+.
 
-## 📥 Importing
+## Authentication
 
 ```python
-from py_spoo_url import Shorten, Statistics
+client = SpooClient()                    # reads SPOO_API_KEY, else anonymous
+client = SpooClient(api_key="spoo_...")  # explicit API key
+client = SpooClient(api_key="")          # force anonymous even with env set
+client = SpooClient(bearer_token=...)    # a JWT, or a callable returning one
 ```
 
-## ✂️ Shortening URL
+Anonymous clients work under anonymous limits. Create API keys from your spoo.me dashboard. Self-hosting? Point `base_url` (or `SPOO_BASE_URL`) at your instance's `/api/v1`.
 
-### For Non-emoji aliases
+Async is the same surface with `AsyncSpooClient`, `await`, and `async for`.
+
+## Links
 
 ```python
-shortener = Shortener()
-long_url = "https://www.example.com"
-short_url = shortener.shorten(long_url, password="SuperSecretPassword@444", max_clicks=100)
-# for custom alias, put `alias=<your_choice>`
+from spoo import SpooClient, UrlFilter, UrlStatus, SortBy
 
-print(f"Shortened URL: {short_url}")
+client = SpooClient(api_key="spoo_...")
+
+url = client.urls.create(
+    "https://example.com",
+    alias="mylink",
+    password="Secret@123",
+    max_clicks=500,
+    expire_after="2026-12-31T00:00:00",
+    block_bots=True,
+    private_stats=True,
+)
+
+# Check availability first if you want a precise reason
+check = client.urls.check_alias("mylink")
+if not check.available:
+    print(check.reason)  # taken | format | length | reserved | emoji_policy
+
+# Fetch one link by id, or by its address
+link = client.urls.get(url.id)
+link = client.urls.get_by_alias("mylink")                    # your base domain
+link = client.urls.get_by_alias("mylink", domain="links.acme.com")
+
+# Iterate everything (auto-pagination), or one filtered page
+for item in client.urls.list(sort_by=SortBy.TOTAL_CLICKS):
+    print(item.alias, item.total_clicks)
+page = client.urls.list_page(filter=UrlFilter(status=UrlStatus.ACTIVE, search="docs"))
+
+# Update, toggle, delete
+client.urls.update(url.id, long_url="https://example.com/new", max_clicks=0)
+client.urls.set_status(url.id, UrlStatus.INACTIVE)
+client.urls.delete(url.id)
 ```
 
-### 😎 For Emoji aliases
+### Bulk operations
+
+Up to 100 ids per call; results are reported per item instead of throwing:
 
 ```python
-shortener = Shortener()
-long_url = "https://www.example.com"
-emoji_url = shorten.emojify(long_url) # pass password and max-clicks as shown above if you want
-# for custom emoji alias, put `emoji_alias=<random_emoji_sequence>`
+result = client.urls.bulk_set_status(ids, UrlStatus.INACTIVE)
+print(result.summary.succeeded, result.summary.failed)
+for row in result.results:
+    if not row.ok:
+        print(row.id, row.error_code)
 
-print(f"Emojified URL: {emoji_url}")
+client.urls.bulk_delete(ids)
+client.urls.bulk_set_expiry(ids, "2027-01-01T00:00:00")   # None clears
+client.urls.bulk_set_domain(ids, "links.acme.com")        # None = default
 ```
 
-**Note:** The emoji sequence must contain actual emojies like `😆🤯...`
-
----
-
-## 📊 URL Statistics
-
-The Statistics class enables you to retrieve detailed statistics for a given short code.
-
-### 🔧 Initializing the class
+### Emoji aliases
 
 ```python
-from spoo_me import Statistics
-
-# Initialize Statistics with a short code
-stats = Statistics(short_code="ga") # replace with the shortcode you want
-# if the shortUrl is password protected you have to pass the password too
+url = client.shorten("https://example.com", alias="🚀🔥")       # pick your own
+url = client.shorten("https://example.com", alias_type="emoji")  # auto-generate
 ```
 
-### 👀 Viewing the Basic Statistics
+The SDK validates emoji aliases before sending, against the server's own accepted catalogue (fetched once per client and cached). The catalogue is available directly for building pickers:
 
 ```python
-print(f"Total Clicks: {stats.total_clicks}")
-print(f"Total Unique Clicks: {stats.total_unique_clicks}")
-print(f"Average Daily Clicks: {stats.average_daily_clicks}")
-print(f"Clicks Analysis: {stats.clicks_analysis}")
-print(f"Browser Analysis: {stats.browsers_analysis}")
-# ... and more (details below)
+emoji_set = client.urls.emoji_set()   # ~1170 entries with names and groups
 ```
 
-<details>
+### Claim links
 
-<summary> List of the analytics you can access </summary>
-
-###
-
-| **Method/Attribute** | **Description** |
-|------------------------------------|---------------------------------------------------------|
-| total_clicks | Total number of clicks on the short URL. |
-| total_unique_clicks | Total number of unique clicks on the short URL. |
-| average_daily_clicks | Average number of clicks per day. |
-| average_monthly_clicks | Average number of clicks per month. |
-| average_weekly_clicks | Average number of clicks per week. |
-| last_click | Information about the last click on the short URL. |
-| last_click_browser | Browser used for the last click. |
-| last_click_platform | Operating system used for the last click. |
-| created_at | Date when the short URL was created. |
-| creation_time | Time of day when the short URL was created. |
-| browsers_analysis | Analysis of browsers used for clicks. |
-| platforms_analysis | Analysis of operating systems used for clicks. |
-| country_analysis | Analysis of countries from which clicks originated. |
-| referrers_analysis | Analysis of referrers (sources) of clicks. |
-| clicks_analysis | Detailed analysis of daily clicks. |
-| unique_browsers_analysis | Analysis of unique browsers used for clicks. |
-| unique_platforms_analysis | Analysis of unique operating systems for clicks. |
-| unique_country_analysis | Analysis of unique countries from which clicks originated. |
-| unique_referrers_analysis | Analysis of unique referrers (sources) of clicks. |
-| unique_clicks_analysis | Detailed analysis of daily unique clicks. |
-| expired | Indicates if the short URL has expired. |
-| password | Password associated with the short URL (if any). |
-
-#### Example Usage
+Anonymous creates return a one-time `claim_token`. After the user signs in, the token proves they created the link and transfers ownership, stats included:
 
 ```python
-print(f"Creation Time: {stats.creation_time}")
+anon_url = SpooClient(api_key="").shorten("https://example.com")
+
+result = client.urls.claim(anon_url.id, anon_url.claim_token)
+print(result.status)   # claimed | already_yours | invalid
+
+client.urls.claim_many([(id1, token1), (id2, token2)])   # up to 16
 ```
 
-</details>
+## Statistics
 
-### 📈 Generating Insightful Charts
+Account-wide analytics (requires authentication):
 
 ```python
-plt = stats.make_chart(data="browsers_analysis", chart_type="bar") # this returns an object of matplotlib
-plt.show()
+from spoo import GroupBy, Metric, StatsFilter
 
-# ... and more (see below)
-
-# generating countries heatmaps
-plt = stats.make_countries_heatmap()
-plt.savefig("heatmap.png", format="png", bbox_inches="tight", pad_inches=0.5, dpi=300,)
-
-plt = stats.make_unique_countries_heatmap()
-plt.savefig("unique_heatmap.png", format="png", bbox_inches="tight", pad_inches=0.5, dpi=300,)
+stats = client.stats.query(
+    start_date="2026-07-01",
+    end_date="2026-08-19",
+    group_by=[GroupBy.TIME, GroupBy.COUNTRY, GroupBy.DEVICE, GroupBy.UTM_SOURCE],
+    metrics=[Metric.CLICKS, Metric.UNIQUE_CLICKS],
+    timezone="Asia/Kolkata",
+    filters=StatsFilter(country=["IN", "US"], utm_campaign=["launch"]),
+)
+print(stats.summary.total_clicks)
+for row in stats.metrics["clicks_by_country"]:   # "{metric}_by_{dimension}"
+    print(row)
 ```
 
-<details>
-<summary> List of Available Charts </summary>
-
-###
-
-| Method | Description |
-|--------------------------|---------------------------------------------------------|
-| make_chart | Create various types of charts based on the data provided. |
-
-| Parameters | Description |
-|--------------------------|---------------------------------------------------------|
-| data | Type of data to visualize (e.g., 'browsers_analysis', see below). |
-| chart_type | Type of chart to create (e.g., "bar", "pie", "line", see below). |
-| days | Number of days to consider for time-based analysis. (only for `last_n_days_analysis` and `last_n_days_unique_analysis`) |
-
-#### Valid Data that can be passed to make the chart
-
-- `'browsers_analysis'`
-- `'platforms_analysis'`
-- `'country_analysis'`
-- `'referrers_analysis'`
-- `'clicks_analysis'`
-- `'unique_browsers_analysis'`
-- `'unique_platforms_analysis'`
-- `'unique_country_analysis'`
-- `'unique_referrers_analysis'`
-- `'unique_clicks_analysis'`
-- `'last_n_days_analysis'`
-- `'last_n_days_unique_analysis'`
-
-#### Valid Chart types
-
-- 'bar'
-- 'pie'
-- 'line'
-- 'scatter'
-- 'hist'
-- 'box'
-- 'area'
-
-#### Usage Example
+For a single link you own:
 
 ```python
-plt = stats.make_chart('browsers_analysis', chart_type="bar")
-plt.show()
+stats = client.stats.for_link(url.id, group_by=[GroupBy.TIME])
 ```
 
-</details>
-
-#### 👀 Heatmap Preview
-
-<img src="https://raw.githubusercontent.com/spoo-me/py_spoo_url/main/assets/heatmap-example.png" alt="Heatmap Example Image">
-
-## 📤 Exporting Stats Data
-
-You can export the statistical data to various file formats, including Excel, CSV, and JSON:
+Public per-link stats work without authentication. Password-protected links take the password in a POST body, never in the URL:
 
 ```python
-# Export data to Excel
-stats.export_data(filename="stats_export.xlsx", filetype="xlsx")
-
-# Export data to CSV and compress into a ZIP file
-stats.export_data(filename="stats_export", filetype="csv")
-
-# Export data to Json
-stats.export_data(filename="stats_export.json", filetypes="json")
+public = client.stats.public("mylink")
+public = client.stats.public("mylink", password="Secret@123")
 ```
 
----
+### Exports
 
-## 🧳 Dependencies
+Same parameters as `query()`, returned as `bytes` in `csv`, `xlsx`, `json`, or `xml`:
 
-- `matplotlib`: For creating charts and visualizations.
-- `requests`: For making HTTP requests to the Spoo.me API.
-- `pandas`: For handling and manipulating data in tabular form. 🐼
-- `geopandas`: For creating geographical visualizations. 🌎
+```python
+from pathlib import Path
+from spoo import ExportFormat
 
-**All of the dependencies are automatically installed while installing the package but in case of any errors, you can install all of the dependencies listed in the `requirements.txt` file.**
+data = client.stats.export(ExportFormat.CSV, start_date="2026-07-01")
+Path("report.csv").write_bytes(data)
 
-## 🚨 Error Codes
+Path("mylink.xlsx").write_bytes(client.stats.export_link(url.id, ExportFormat.XLSX))
+```
 
-To see the error codes returned by the API, please visit [https://spoo.me/api](https://spoo.me/api)
+## Sign in with Spoo
 
-## 🤝 Support and Issues
+For connected apps: the PKCE device-auth flow gets you user-scoped tokens without handling passwords. Your app must be registered with spoo.me.
 
-If you encounter any issues or have questions about using the Spoo.me Python package, please open an issue on the GitHub repository.
+```python
+client = SpooClient()
+pkce = client.oauth.generate_pkce()
+state = client.oauth.generate_state()
 
-## 🤗 Contributing
+# 1. Send the user to the consent page
+print(client.oauth.authorization_url("my-app", code_challenge=pkce.challenge, state=state))
 
-Contributions are welcome! If you have ideas for improvements or new features, feel free to fork the repository, make your changes, and submit a pull request
+# 2. Your redirect URI receives code + state; verify state, then exchange
+tokens = client.oauth.exchange_code(code, pkce.verifier)
+print(tokens.user.email)
 
-## 📜 Licence
+# 3. A provider keeps the session fresh (refresh tokens rotate: persist them)
+provider = client.oauth.token_provider(tokens, on_refresh=save_to_disk)
+user_client = SpooClient(bearer_token=provider)
+print(user_client.me().plan)
+```
 
-This package is licensed under the MIT License - see the LICENSE file for details.
+When the refresh token itself is rejected, calls raise `SessionExpiredError`: send the user through the flow again. See [examples/sign_in_with_spoo.py](examples/sign_in_with_spoo.py) for the full loop.
 
----
-![PyPI](https://img.shields.io/pypi/v/py_spoo_url?style=flat-square)
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/spoo-me/py_spoo_url/ci.yml)
-![Codecov](https://img.shields.io/codecov/c/github/spoo-me/py_spoo_url)
-![Downloads](https://img.shields.io/pypi/dm/py_spoo_url?style=flat-square)
-![Last Commit](https://img.shields.io/github/last-commit/spoo-me/py_spoo_url?style=flat-square)
+## Error handling
 
----
+Errors map to typed exceptions carrying the backend error code:
 
-<h6 align="center">
-<img src="https://spoo.me/static/images/favicon.png" height=30>
-<br>
-© spoo.me . 2025
+| Status | Exception |
+| --- | --- |
+| 400 / 422 | `ValidationError` |
+| 401 | `AuthenticationError` |
+| 403 | `ForbiddenError` |
+| 404 | `NotFoundError` |
+| 409 | `ConflictError` |
+| 410 | `GoneError` |
+| 429 | `RateLimitError` (`retry_after`, `limit`, `remaining`, `reset`) |
+| 5xx | `InternalServerError` |
 
-All Rights Reserved</h6>
+Network failures raise `APIConnectionError` / `APITimeoutError`; a rejected refresh token raises `SessionExpiredError`. All of them subclass `SpooError`.
 
-<p align="center">
-	<a href="https://github.com/spoo-me/py_spoo_url/blob/master/LICENSE.txt"><img src="https://img.shields.io/static/v1.svg?style=for-the-badge&label=License&message=MIT&logoColor=d9e0ee&colorA=363a4f&colorB=b7bdf8"/></a>
-</p>
+```python
+from spoo import RateLimitError, ValidationError
+
+try:
+    client.shorten("https://example.com", alias="taken")
+except ValidationError as e:
+    print(e.error_code, e.message)
+except RateLimitError as e:
+    print(f"limited, window resets at {e.reset}")
+```
+
+## Retries and configuration
+
+Retries (default 2) honor `Retry-After` and back off exponentially with jitter. GET/PUT/DELETE retry on 408/429/5xx and network failures; POST/PATCH retry only on 429 and 503, where the server provably did no work.
+
+```python
+client = SpooClient(
+    api_key="spoo_...",
+    base_url="https://your-instance/api/v1",
+    timeout=30.0,
+    max_retries=3,
+    default_headers={"X-Request-ID": "..."},
+)
+```
+
+Every request carries an `X-Spoo-Client: sdk-py/<version>` tag; override it via `default_headers` if you are building a product on top and want traffic attributed to it.
+
+Note on custom domains: `domain=` parameters work end to end, but custom domains are currently in a limited beta on spoo.me, so most accounts will see `403` until it opens up.
+
+## Examples
+
+Runnable scripts in [examples/](examples/): quickstart, async usage, analytics, URL management, claim links, emoji aliases, and Sign in with Spoo.
+
+## Development
+
+```bash
+uv sync
+uv run pytest
+uv run ruff check src/ tests/ examples/
+uv run mypy --strict src/spoo/
+```
+
+## Versioning
+
+Response models tolerate new fields (`extra="allow"`), so additive API changes never break an installed version. Breaking changes bump the major version.
+
+## License
+
+[MIT](LICENSE)
