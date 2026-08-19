@@ -1,3 +1,12 @@
+> [!IMPORTANT]
+> **This package is deprecated.** py-spoo-url targets the legacy spoo.me endpoints; they keep working, but this package receives no new features or fixes. Its successor is [`spoo`](https://pypi.org/project/spoo/), a fully typed sync and async SDK for the current API:
+>
+> ```bash
+> pip install spoo
+> ```
+>
+> See the [migration guide](https://github.com/spoo-me/spoo-py/blob/main/MIGRATION.md) for a mapping of every py-spoo-url call to its replacement.
+
 <p align=center>
     <img src="https://raw.githubusercontent.com/spoo-me/py_spoo_url/main/assets/py_spoo_url.png" height="50px" alt="py_spoo_url banner">
 </p>
