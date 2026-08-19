@@ -9593,6 +9593,9 @@
                 "format": "date-time"
               },
               {
+                "type": "integer"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -10142,6 +10145,9 @@
               {
                 "type": "string",
                 "format": "date-time"
+              },
+              {
+                "type": "integer"
               },
               {
                 "type": "null"
@@ -12825,6 +12831,9 @@
               {
                 "type": "string",
                 "format": "date-time"
+              },
+              {
+                "type": "integer"
               },
               {
                 "type": "null"
