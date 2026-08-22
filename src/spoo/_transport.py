@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import random
+from collections.abc import AsyncIterator, Iterator
 from typing import Any, TypeVar
 
 import httpx
@@ -174,6 +176,56 @@ class AsyncTransport(BaseTransport):
         response = await self._send_with_retry(method, path, json=json, params=params)
         return _json_or_text(response)
 
+    @contextlib.asynccontextmanager
+    async def stream(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> AsyncIterator[httpx.Response]:
+        """Open a streaming response. Retries happen only before the first
+        byte of the body; error responses are read fully and raised typed."""
+        import asyncio
+
+        params = self._clean_params(params)
+        for attempt in range(self._max_retries + 1):
+            headers = await self._resolve_auth(self._build_headers())
+            request = self._client.build_request(
+                method, self._url(path), headers=headers, params=params
+            )
+            try:
+                response = await self._client.send(request, stream=True)
+            except httpx.TimeoutException as exc:
+                if self._should_retry_connection(method, attempt, self._max_retries):
+                    await asyncio.sleep(self._backoff_delay(attempt))
+                    continue
+                raise APITimeoutError(f"Request timed out: {exc}") from exc
+            except httpx.ConnectError as exc:
+                if self._should_retry_connection(method, attempt, self._max_retries):
+                    await asyncio.sleep(self._backoff_delay(attempt))
+                    continue
+                raise APIConnectionError(f"Connection failed: {exc}") from exc
+
+            if response.status_code < 400:
+                try:
+                    yield response
+                finally:
+                    await response.aclose()
+                return
+
+            if not self._should_retry(response, attempt, method, self._max_retries):
+                try:
+                    await response.aread()
+                    raise_for_status(response)
+                finally:
+                    await response.aclose()
+            delay = self._retry_delay(response, attempt)
+            await response.aclose()
+            await asyncio.sleep(delay)
+
+        raise AssertionError("unreachable")  # pragma: no cover
+
     async def _resolve_auth(self, headers: dict[str, str]) -> dict[str, str]:
         if isinstance(self._auth, DynamicBearerAuth) and "Authorization" not in headers:
             token = self._auth.provider()  # type: ignore[operator]
@@ -284,6 +336,56 @@ class SyncTransport(BaseTransport):
     ) -> Any:
         response = self._send_with_retry(method, path, json=json, params=params)
         return _json_or_text(response)
+
+    @contextlib.contextmanager
+    def stream(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> Iterator[httpx.Response]:
+        """Open a streaming response. Retries happen only before the first
+        byte of the body; error responses are read fully and raised typed."""
+        import time
+
+        params = self._clean_params(params)
+        for attempt in range(self._max_retries + 1):
+            headers = self._resolve_auth(self._build_headers())
+            request = self._client.build_request(
+                method, self._url(path), headers=headers, params=params
+            )
+            try:
+                response = self._client.send(request, stream=True)
+            except httpx.TimeoutException as exc:
+                if self._should_retry_connection(method, attempt, self._max_retries):
+                    time.sleep(self._backoff_delay(attempt))
+                    continue
+                raise APITimeoutError(f"Request timed out: {exc}") from exc
+            except httpx.ConnectError as exc:
+                if self._should_retry_connection(method, attempt, self._max_retries):
+                    time.sleep(self._backoff_delay(attempt))
+                    continue
+                raise APIConnectionError(f"Connection failed: {exc}") from exc
+
+            if response.status_code < 400:
+                try:
+                    yield response
+                finally:
+                    response.close()
+                return
+
+            if not self._should_retry(response, attempt, method, self._max_retries):
+                try:
+                    response.read()
+                    raise_for_status(response)
+                finally:
+                    response.close()
+            delay = self._retry_delay(response, attempt)
+            response.close()
+            time.sleep(delay)
+
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def _resolve_auth(self, headers: dict[str, str]) -> dict[str, str]:
         if isinstance(self._auth, DynamicBearerAuth) and "Authorization" not in headers:

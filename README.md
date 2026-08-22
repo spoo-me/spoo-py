@@ -178,6 +178,17 @@ link_data = client.stats.export_link(url.id, ExportFormat.XLSX)
 Path(link_data.filename or "link.xlsx").write_bytes(link_data)
 ```
 
+Large accounts should stream instead of buffering; retries still apply up to the first byte of the body:
+
+```python
+with client.stats.export_stream(ExportFormat.XLSX) as stream:
+    with open(stream.filename or "export.xlsx", "wb") as f:
+        for chunk in stream.iter_bytes():
+            f.write(chunk)
+```
+
+`export_link_stream(url_id, format)` is the per-link variant, and the async client swaps in `async with` and `async for`.
+
 ## Sign in with Spoo
 
 For connected apps: the PKCE device-auth flow gets you user-scoped tokens without handling passwords. Your app must be registered with spoo.me.
@@ -254,7 +265,7 @@ Deliberately out of scope: API key management, account and profile lifecycle, `/
 | `links.emoji_set` | `GET /api/v1/emoji-set` |
 | `stats.query`, `stats.for_link` | `GET /api/v1/stats`, `/api/v1/stats/links/{url_id}` |
 | `stats.public` | `GET`/`POST /api/v1/public/stats/{short_code}` |
-| `stats.export`, `stats.export_link` | `GET /api/v1/export`, `/api/v1/export/links/{url_id}` |
+| `stats.export`, `stats.export_link` (+ `_stream` variants) | `GET /api/v1/export`, `/api/v1/export/links/{url_id}` |
 | `oauth.*` | `/auth/device/{token,refresh}` |
 | `me` | `GET /auth/me` |
 

@@ -20,6 +20,7 @@ from ._errors import (
     ValidationError,
 )
 from ._pkce import PkcePair, generate_pkce_pair, generate_state
+from ._resources.stats import AsyncExportStream, ExportStream
 from ._sync_client import SpooClient
 from ._version import __version__
 from .types import (
@@ -85,6 +86,8 @@ __all__ = [
     "ValidationError",
     # OAuth helpers
     "PkcePair",
+    "ExportStream",
+    "AsyncExportStream",
     "generate_pkce_pair",
     "generate_state",
     # Types

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import re
+from collections.abc import AsyncIterator, Iterator
 from datetime import datetime
 from typing import Any
 from urllib.parse import unquote
@@ -42,18 +44,50 @@ def _sanitize_filename(name: str | None) -> str | None:
     return name
 
 
-def _export_file(response: httpx.Response) -> ExportFile:
-    disposition = response.headers.get("Content-Disposition", "")
+def _filename_from_headers(headers: httpx.Headers) -> str | None:
+    disposition = headers.get("Content-Disposition", "")
     match = _FILENAME_STAR_RE.search(disposition)
     filename = unquote(match.group(1)) if match else None
     if filename is None:
         plain = _FILENAME_RE.search(disposition)
         filename = plain.group(1) if plain else None
+    return _sanitize_filename(filename)
+
+
+def _export_file(response: httpx.Response) -> ExportFile:
     return ExportFile(
         response.content,
-        filename=_sanitize_filename(filename),
+        filename=_filename_from_headers(response.headers),
         content_type=response.headers.get("Content-Type"),
     )
+
+
+class ExportStream:
+    """A streaming export: iterate chunks instead of buffering the file.
+
+    Carries the same sanitized ``filename`` and ``content_type`` as
+    :class:`ExportFile`. Only valid inside its ``with`` block.
+    """
+
+    def __init__(self, response: httpx.Response) -> None:
+        self._response = response
+        self.filename = _filename_from_headers(response.headers)
+        self.content_type: str | None = response.headers.get("Content-Type")
+
+    def iter_bytes(self, chunk_size: int | None = None) -> Iterator[bytes]:
+        return self._response.iter_bytes(chunk_size)
+
+
+class AsyncExportStream:
+    """Async twin of :class:`ExportStream` (``async for`` over iter_bytes)."""
+
+    def __init__(self, response: httpx.Response) -> None:
+        self._response = response
+        self.filename = _filename_from_headers(response.headers)
+        self.content_type: str | None = response.headers.get("Content-Type")
+
+    def iter_bytes(self, chunk_size: int | None = None) -> AsyncIterator[bytes]:
+        return self._response.aiter_bytes(chunk_size)
 
 
 def _reject_identity_filters(filters: LinkStatsFilter | dict[str, Any] | None) -> None:
@@ -261,6 +295,68 @@ class AsyncStats(AsyncAPIResource):
         )
         return _export_file(response)
 
+    @contextlib.asynccontextmanager
+    async def export_stream(
+        self,
+        format: ExportFormat | str,
+        *,
+        start_date: str | datetime | None = None,
+        end_date: str | datetime | None = None,
+        group_by: list[GroupBy | str] | None = None,
+        metrics: list[Metric | str] | None = None,
+        timezone: str = "UTC",
+        filters: StatsFilter | dict[str, Any] | None = None,
+    ) -> AsyncIterator[AsyncExportStream]:
+        """Stream an account-wide export instead of buffering it in memory.
+
+        Usage::
+
+            async with client.stats.export_stream("xlsx") as stream:
+                with open(stream.filename or "export.xlsx", "wb") as f:
+                    async for chunk in stream.iter_bytes():
+                        f.write(chunk)
+        """
+        params = _build_stats_params(
+            start_date=start_date,
+            end_date=end_date,
+            group_by=group_by,
+            metrics=metrics,
+            timezone=timezone,
+            filters=filters,
+        )
+        params["format"] = enum_value(format)
+        async with self._transport.stream("GET", "/export", params=params) as response:
+            yield AsyncExportStream(response)
+
+    @contextlib.asynccontextmanager
+    async def export_link_stream(
+        self,
+        url_id: str,
+        format: ExportFormat | str,
+        *,
+        start_date: str | datetime | None = None,
+        end_date: str | datetime | None = None,
+        group_by: list[GroupBy | str] | None = None,
+        metrics: list[Metric | str] | None = None,
+        timezone: str = "UTC",
+        filters: LinkStatsFilter | dict[str, Any] | None = None,
+    ) -> AsyncIterator[AsyncExportStream]:
+        """Stream one owned link's export instead of buffering it."""
+        _reject_identity_filters(filters)
+        params = _build_stats_params(
+            start_date=start_date,
+            end_date=end_date,
+            group_by=group_by,
+            metrics=metrics,
+            timezone=timezone,
+            filters=filters,
+        )
+        params["format"] = enum_value(format)
+        async with self._transport.stream(
+            "GET", f"/export/links/{url_id}", params=params
+        ) as response:
+            yield AsyncExportStream(response)
+
 
 # ── Sync resource ────────────────────────────────────────────────────────
 
@@ -403,3 +499,63 @@ class Stats(SyncAPIResource):
         params["format"] = enum_value(format)
         response = self._transport.request_raw("GET", f"/export/links/{url_id}", params=params)
         return _export_file(response)
+
+    @contextlib.contextmanager
+    def export_stream(
+        self,
+        format: ExportFormat | str,
+        *,
+        start_date: str | datetime | None = None,
+        end_date: str | datetime | None = None,
+        group_by: list[GroupBy | str] | None = None,
+        metrics: list[Metric | str] | None = None,
+        timezone: str = "UTC",
+        filters: StatsFilter | dict[str, Any] | None = None,
+    ) -> Iterator[ExportStream]:
+        """Stream an account-wide export instead of buffering it in memory.
+
+        Usage::
+
+            with client.stats.export_stream("xlsx") as stream:
+                with open(stream.filename or "export.xlsx", "wb") as f:
+                    for chunk in stream.iter_bytes():
+                        f.write(chunk)
+        """
+        params = _build_stats_params(
+            start_date=start_date,
+            end_date=end_date,
+            group_by=group_by,
+            metrics=metrics,
+            timezone=timezone,
+            filters=filters,
+        )
+        params["format"] = enum_value(format)
+        with self._transport.stream("GET", "/export", params=params) as response:
+            yield ExportStream(response)
+
+    @contextlib.contextmanager
+    def export_link_stream(
+        self,
+        url_id: str,
+        format: ExportFormat | str,
+        *,
+        start_date: str | datetime | None = None,
+        end_date: str | datetime | None = None,
+        group_by: list[GroupBy | str] | None = None,
+        metrics: list[Metric | str] | None = None,
+        timezone: str = "UTC",
+        filters: LinkStatsFilter | dict[str, Any] | None = None,
+    ) -> Iterator[ExportStream]:
+        """Stream one owned link's export instead of buffering it."""
+        _reject_identity_filters(filters)
+        params = _build_stats_params(
+            start_date=start_date,
+            end_date=end_date,
+            group_by=group_by,
+            metrics=metrics,
+            timezone=timezone,
+            filters=filters,
+        )
+        params["format"] = enum_value(format)
+        with self._transport.stream("GET", f"/export/links/{url_id}", params=params) as response:
+            yield ExportStream(response)
