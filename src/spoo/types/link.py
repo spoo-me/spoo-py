@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from .shared import LinkStatus, enum_value
+from .tag import TagRef, TagsMatch
 
 
 class CreatedLink(BaseModel):
@@ -22,6 +23,7 @@ class CreatedLink(BaseModel):
     created_at: int
     status: str
     private_stats: bool | None = None
+    tags: list[TagRef] = Field(default_factory=list)
     claim_token: str | None = None
     """One-time bearer token returned on anonymous creates.
 
@@ -49,6 +51,7 @@ class Link(BaseModel):
     total_clicks: int | None = None
     last_click: str | None = None
     domain: str | None = None
+    tags: list[TagRef] = Field(default_factory=list)
 
 
 class LinkPage(BaseModel):
@@ -80,6 +83,7 @@ class UpdatedLink(BaseModel):
     block_bots: bool | None = None
     private_stats: bool | None = None
     domain: str | None = None
+    tags: list[TagRef] = Field(default_factory=list)
     updated_at: int
 
 
@@ -214,6 +218,9 @@ class LinkFilter:
         password_set: bool | None = None,
         max_clicks_set: bool | None = None,
         search: str | None = None,
+        tag_ids: list[str] | None = None,
+        tag_names: list[str] | None = None,
+        tags_match: TagsMatch | str | None = None,
     ) -> None:
         self.status = enum_value(status) if status else None
         self.created_after = created_after
@@ -221,6 +228,9 @@ class LinkFilter:
         self.password_set = password_set
         self.max_clicks_set = max_clicks_set
         self.search = search
+        self.tag_ids = tag_ids
+        self.tag_names = tag_names
+        self.tags_match = tags_match
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {}
@@ -236,4 +246,10 @@ class LinkFilter:
             d["maxClicksSet"] = self.max_clicks_set
         if self.search is not None:
             d["search"] = self.search
+        if self.tag_ids is not None:
+            d["tagIds"] = self.tag_ids
+        if self.tag_names is not None:
+            d["tagNames"] = self.tag_names
+        if self.tags_match is not None:
+            d["tagsMatch"] = self.tags_match
         return d

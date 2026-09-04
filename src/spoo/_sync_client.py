@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from functools import cached_property
 from typing import Any
@@ -10,6 +11,7 @@ from ._base_client import _BaseClient
 from ._resources.links import Links
 from ._resources.oauth import OAuth
 from ._resources.stats import Stats
+from ._resources.tags import Tags
 from ._transport import SyncTransport
 from .types.link import CreatedLink
 from .types.oauth import MeEnvelope, UserProfile
@@ -60,6 +62,10 @@ class SpooClient(_BaseClient):
         return Stats(self._transport)
 
     @cached_property
+    def tags(self) -> Tags:
+        return Tags(self._transport)
+
+    @cached_property
     def oauth(self) -> OAuth:
         return OAuth(self._transport, self._site_root)
 
@@ -80,6 +86,7 @@ class SpooClient(_BaseClient):
         expire_after: str | int | datetime | None = None,
         private_stats: bool | None = None,
         domain: str | None = None,
+        tag_ids: Sequence[str] | None = None,
     ) -> CreatedLink:
         """Convenience: shorten a URL in one call."""
         return self.links.create(
@@ -92,6 +99,7 @@ class SpooClient(_BaseClient):
             expire_after=expire_after,
             private_stats=private_stats,
             domain=domain,
+            tag_ids=tag_ids,
         )
 
     def close(self) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from functools import cached_property
 from typing import Any
@@ -10,6 +11,7 @@ from ._base_client import _BaseClient
 from ._resources.links import AsyncLinks
 from ._resources.oauth import AsyncOAuth
 from ._resources.stats import AsyncStats
+from ._resources.tags import AsyncTags
 from ._transport import AsyncTransport
 from .types.link import CreatedLink
 from .types.oauth import MeEnvelope, UserProfile
@@ -60,6 +62,10 @@ class AsyncSpooClient(_BaseClient):
         return AsyncStats(self._transport)
 
     @cached_property
+    def tags(self) -> AsyncTags:
+        return AsyncTags(self._transport)
+
+    @cached_property
     def oauth(self) -> AsyncOAuth:
         return AsyncOAuth(self._transport, self._site_root)
 
@@ -82,6 +88,7 @@ class AsyncSpooClient(_BaseClient):
         expire_after: str | int | datetime | None = None,
         private_stats: bool | None = None,
         domain: str | None = None,
+        tag_ids: Sequence[str] | None = None,
     ) -> CreatedLink:
         """Convenience: shorten a URL in one call."""
         return await self.links.create(
@@ -94,6 +101,7 @@ class AsyncSpooClient(_BaseClient):
             expire_after=expire_after,
             private_stats=private_stats,
             domain=domain,
+            tag_ids=tag_ids,
         )
 
     async def close(self) -> None:

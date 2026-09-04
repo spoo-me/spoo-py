@@ -102,7 +102,32 @@ for row in result.results:
 client.links.bulk_delete(ids)
 client.links.bulk_set_expiry(ids, "2027-01-01T00:00:00")   # None clears
 client.links.bulk_set_domain(ids, "links.acme.com")        # None = default
+client.links.bulk_update_tags(ids, add=[launch.id], remove=[old.id])
 ```
+
+### Tags
+
+Tags are labels you define once per account and attach to links by id. A link carries up to 10. Requests type the palette as `TagColor` (9 keys) and `TagIcon` (87 keys); response models keep `color` and `icon` as plain `str` on purpose, so a key the server adds later still parses.
+
+```python
+launch = client.tags.create("launch", color="violet", icon="rocket")
+client.tags.update(launch.id, color="teal")   # omitted fields stay as they are
+
+# Tag at create time, or replace the list on update ([] clears it)
+url = client.links.create("https://example.com", tag_ids=[launch.id])
+client.links.update(url.id, tag_ids=[launch.id, other.id])
+print([t.name for t in url.tags])
+
+# Filter the list by tag; "any" (default) or "all" for how several combine
+page = client.links.list_page(filter=LinkFilter(tag_names=["launch", "q3"], tags_match="all"))
+
+for tag in client.tags.list():
+    print(tag.name, tag.link_count)
+deleted = client.tags.delete(launch.id)   # also strips it from every link
+print(deleted.links_updated)
+```
+
+Stats and exports take the same scope through `StatsFilter(tag=[...])` by name or `StatsFilter(tag_id=[...])` by id.
 
 ### Emoji aliases
 
@@ -143,7 +168,7 @@ stats = client.stats.query(
     group_by=[GroupBy.TIME, GroupBy.COUNTRY, GroupBy.DEVICE, GroupBy.UTM_SOURCE],
     metrics=[Metric.CLICKS, Metric.UNIQUE_CLICKS],
     timezone="Asia/Kolkata",
-    filters=StatsFilter(country=["IN", "US"], utm_campaign=["launch"]),
+    filters=StatsFilter(country=["IN", "US"], utm_campaign=["launch"], tag=["q3"]),
 )
 print(stats.summary.total_clicks)
 for row in stats.metrics["clicks_by_country"]:   # "{metric}_by_{dimension}"
@@ -246,7 +271,7 @@ except RateLimitError as e:
 
 ## Scope
 
-The SDK covers the data plane a third-party integration builds against: links (create, manage, bulk, claim, emoji aliases), analytics (account, per-link, public, exports), the public preview, and Sign in with Spoo plus the read-only identity check.
+The SDK covers the data plane a third-party integration builds against: links (create, manage, bulk, claim, emoji aliases, tags), analytics (account, per-link, public, exports), the public preview, and Sign in with Spoo plus the read-only identity check.
 
 Deliberately out of scope: API key management, account and profile lifecycle, `/contact`, `/health`, and all legacy (pre-v1) endpoints. Feature-gated surfaces (custom domains management, webhooks, geo rules, meta tags) are not wrapped while they are not generally available, except the `domain` parameters which pass through.
 
@@ -260,9 +285,11 @@ Deliberately out of scope: API key management, account and profile lifecycle, `/
 | `links.update`, `links.set_status`, `links.delete` | `PATCH`/`DELETE /api/v1/urls/{url_id}` |
 | `links.delete_all` | `DELETE /api/v1/urls?domain=` |
 | `links.claim`, `links.claim_many` | `POST /api/v1/urls/claim` |
-| `links.bulk_*` | `POST /api/v1/urls/bulk/{delete,status,expiry,domain}` |
+| `links.bulk_*` | `POST /api/v1/urls/bulk/{delete,status,expiry,domain,tags}` |
 | `links.preview` | `GET /api/v1/public/preview/{short_code}` |
 | `links.emoji_set` | `GET /api/v1/emoji-set` |
+| `tags.list`, `tags.create` | `GET`/`POST /api/v1/tags` |
+| `tags.update`, `tags.delete` | `PATCH`/`DELETE /api/v1/tags/{tag_id}` |
 | `stats.query`, `stats.for_link` | `GET /api/v1/stats`, `/api/v1/stats/links/{url_id}` |
 | `stats.public` | `GET`/`POST /api/v1/public/stats/{short_code}` |
 | `stats.export`, `stats.export_link` (+ `_stream` variants) | `GET /api/v1/export`, `/api/v1/export/links/{url_id}` |

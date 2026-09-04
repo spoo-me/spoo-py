@@ -94,7 +94,7 @@ def _reject_identity_filters(filters: LinkStatsFilter | dict[str, Any] | None) -
     if filters is None:
         return
     d = filters.to_dict() if isinstance(filters, LinkStatsFilter) else filters
-    bad = {"short_code", "url_id"} & set(d)
+    bad = {"short_code", "url_id", "tag", "tag_id"} & set(d)
     if bad:
         raise ValueError(
             f"per-link endpoints already carry the link identity; remove {sorted(bad)} from filters"

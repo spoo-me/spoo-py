@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from urllib.parse import quote, urlparse
@@ -47,6 +48,7 @@ def _build_create_body(
     expire_after: str | int | datetime | None,
     private_stats: bool | None,
     domain: str | None,
+    tag_ids: Sequence[str] | None,  # Sequence: the list() method shadows the builtin in the classes
 ) -> dict[str, Any]:
     validate_url(long_url)
     if password is not None:
@@ -71,6 +73,10 @@ def _build_create_body(
         body["private_stats"] = private_stats
     if domain is not None:
         body["domain"] = domain
+    if tag_ids is not None:
+        if isinstance(tag_ids, str):
+            raise ValueError("tag_ids must be a list of tag ids, not a single string")
+        body["tag_ids"] = list(tag_ids)
     return body
 
 
@@ -93,6 +99,7 @@ def _build_update_body(
     private_stats: bool | None,
     status: LinkStatus | str | None,
     domain: str | None,
+    tag_ids: Sequence[str] | None,  # Sequence: the list() method shadows the builtin in the classes
 ) -> dict[str, Any]:
     if long_url is not None:
         validate_url(long_url)
@@ -120,6 +127,10 @@ def _build_update_body(
         body["status"] = enum_value(status)
     if domain is not None:
         body["domain"] = domain
+    if tag_ids is not None:
+        if isinstance(tag_ids, str):
+            raise ValueError("tag_ids must be a list of tag ids, not a single string")
+        body["tag_ids"] = list(tag_ids)
     return body
 
 
@@ -173,6 +184,7 @@ class AsyncLinks(AsyncAPIResource):
         expire_after: str | int | datetime | None = None,
         private_stats: bool | None = None,
         domain: str | None = None,
+        tag_ids: Sequence[str] | None = None,
     ) -> CreatedLink:
         if alias is not None:
             if is_emoji_candidate(alias):
@@ -189,6 +201,7 @@ class AsyncLinks(AsyncAPIResource):
             expire_after=expire_after,
             private_stats=private_stats,
             domain=domain,
+            tag_ids=tag_ids,
         )
         return await self._transport.request("POST", "/shorten", json=body, cast_to=CreatedLink)
 
@@ -284,6 +297,23 @@ class AsyncLinks(AsyncAPIResource):
             cast_to=BulkResult,
         )
 
+    async def bulk_update_tags(
+        self,
+        ids: list[str],
+        *,
+        add: list[str] | None = None,
+        remove: list[str] | None = None,
+    ) -> BulkResult:
+        """Add and remove tags (by tag id) on up to 100 URLs. Already-tagged is a no-op."""
+        if not add and not remove:
+            raise ValueError("bulk_update_tags needs at least one tag id in add or remove")
+        return await self._transport.request(
+            "POST",
+            "/urls/bulk/tags",
+            json={"ids": ids, "add": add or [], "remove": remove or []},
+            cast_to=BulkResult,
+        )
+
     async def check_alias(self, alias: str, *, domain: str | None = None) -> AliasCheck:
         params: dict[str, Any] = {"alias": alias}
         if domain is not None:
@@ -345,7 +375,9 @@ class AsyncLinks(AsyncAPIResource):
         private_stats: bool | None = None,
         status: LinkStatus | str | None = None,
         domain: str | None = None,
+        tag_ids: Sequence[str] | None = None,
     ) -> UpdatedLink:
+        """Change one or more fields. ``tag_ids`` replaces the whole list; ``[]`` clears it."""
         if alias is not None:
             if is_emoji_candidate(alias):
                 await self._validate_emoji_alias(alias)
@@ -361,6 +393,7 @@ class AsyncLinks(AsyncAPIResource):
             private_stats=private_stats,
             status=status,
             domain=domain,
+            tag_ids=tag_ids,
         )
         return await self._transport.request(
             "PATCH", f"/urls/{url_id}", json=body, cast_to=UpdatedLink
@@ -404,6 +437,7 @@ class Links(SyncAPIResource):
         expire_after: str | int | datetime | None = None,
         private_stats: bool | None = None,
         domain: str | None = None,
+        tag_ids: Sequence[str] | None = None,
     ) -> CreatedLink:
         if alias is not None:
             if is_emoji_candidate(alias):
@@ -420,6 +454,7 @@ class Links(SyncAPIResource):
             expire_after=expire_after,
             private_stats=private_stats,
             domain=domain,
+            tag_ids=tag_ids,
         )
         return self._transport.request("POST", "/shorten", json=body, cast_to=CreatedLink)
 
@@ -511,6 +546,23 @@ class Links(SyncAPIResource):
             cast_to=BulkResult,
         )
 
+    def bulk_update_tags(
+        self,
+        ids: list[str],
+        *,
+        add: list[str] | None = None,
+        remove: list[str] | None = None,
+    ) -> BulkResult:
+        """Add and remove tags (by tag id) on up to 100 URLs. Already-tagged is a no-op."""
+        if not add and not remove:
+            raise ValueError("bulk_update_tags needs at least one tag id in add or remove")
+        return self._transport.request(
+            "POST",
+            "/urls/bulk/tags",
+            json={"ids": ids, "add": add or [], "remove": remove or []},
+            cast_to=BulkResult,
+        )
+
     def check_alias(self, alias: str, *, domain: str | None = None) -> AliasCheck:
         params: dict[str, Any] = {"alias": alias}
         if domain is not None:
@@ -572,7 +624,9 @@ class Links(SyncAPIResource):
         private_stats: bool | None = None,
         status: LinkStatus | str | None = None,
         domain: str | None = None,
+        tag_ids: Sequence[str] | None = None,
     ) -> UpdatedLink:
+        """Change one or more fields. ``tag_ids`` replaces the whole list; ``[]`` clears it."""
         if alias is not None:
             if is_emoji_candidate(alias):
                 self._validate_emoji_alias(alias)
@@ -588,6 +642,7 @@ class Links(SyncAPIResource):
             private_stats=private_stats,
             status=status,
             domain=domain,
+            tag_ids=tag_ids,
         )
         return self._transport.request("PATCH", f"/urls/{url_id}", json=body, cast_to=UpdatedLink)
 
