@@ -339,6 +339,99 @@
         }
       }
     },
+    "/auth/restore": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Restore Account",
+        "description": "Cancel a pending account deletion during the grace period.\n\nTwo mutually exclusive proofs: ``email`` + ``password`` validates the\naccount credentials, ``restore_token`` consumes the one-shot link from\nthe deletion notice email (the only path for OAuth-only accounts).\nEither flips the account back to ACTIVE, clears the purge deadline,\nand sends a cancellation notice to the account address. Only works\nwhile the account is PENDING_DELETION. The hard boundary is the\nerasure sweep claiming the account (typically within minutes of the\n``purge_after`` deadline from ``DELETE /api/v1/me``), so a restore in\nthe window between the deadline and the claim still succeeds; once\nerasure has started, restore is refused for good.\n\n**Authentication**: Not required (public endpoint)\n\n**Rate Limits**: 3/hour\n\n**Security**: Returns a uniform 403 for wrong credentials, unknown\nemail, invalid or spent tokens, and accounts not pending deletion \u2014\nprevents account enumeration and state probing.",
+        "operationId": "restoreAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request \u2014 invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden \u2014 invalid credentials, unknown email or token, or account is not pending deletion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
     "/auth/me": {
       "get": {
         "tags": [
@@ -2105,7 +2198,7 @@
           "Link Management"
         ],
         "summary": "List Your URLs",
-        "description": "List all URLs owned by the authenticated user.\n\nReturns a paginated list of shortened URLs with support for filtering,\nsorting, and full-text search on aliases and destination URLs.\n\n**Authentication**: Required.\n\n**API Key Scope**: `urls:manage`, `urls:read`, or `admin:all`\n\n**Rate Limits**: 60/min, 5,000/day\n\n**Pagination**: Use `page` and `pageSize` query params. Response includes\n`hasNext` boolean and `total` count.\n\n**Sorting**: Sort by `created_at`, `last_click`, or `total_clicks` in\nascending or descending order.\n\n**Filtering**: Pass a JSON-encoded `filter` parameter with fields like\n`status`, `createdAfter`, `createdBefore`, `passwordSet`, `maxClicksSet`,\nand `search`.",
+        "description": "List all URLs owned by the authenticated user.\n\nReturns a paginated list of shortened URLs with support for filtering,\nsorting, and full-text search on aliases and destination URLs.\n\n**Authentication**: Required.\n\n**API Key Scope**: `urls:manage`, `urls:read`, or `admin:all`\n\n**Rate Limits**: 60/min, 5,000/day\n\n**Pagination**: Use `page` and `pageSize` query params. Response includes\n`hasNext` boolean and `total` count.\n\n**Sorting**: Sort by `created_at`, `last_click`, or `total_clicks` in\nascending or descending order.\n\n**Filtering**: Pass a JSON-encoded `filter` parameter with fields like\n`status`, `createdAfter`, `createdBefore`, `passwordSet`, `maxClicksSet`,\n`search`, `tagIds`, `tagNames` and `tagsMatch`.",
         "operationId": "listUrls",
         "parameters": [
           {
@@ -2192,7 +2285,7 @@
                   "type": "null"
                 }
               ],
-              "description": "JSON string containing filter criteria for URLs. Format: `{\"field\": value}`\n\n**Available filter fields:**\n\n- **status** \u2014 Filter by URL status (`\"ACTIVE\"` or `\"INACTIVE\"`)\n- **createdAfter** \u2014 Filter URLs created after this date (ISO 8601 datetime or Unix timestamp)\n- **createdBefore** \u2014 Filter URLs created before this date (ISO 8601 datetime or Unix timestamp)\n- **passwordSet** \u2014 Filter by password protection (boolean: `true`/`false`)\n- **maxClicksSet** \u2014 Filter by click limit presence (boolean: `true`/`false`)\n- **search** \u2014 Search in alias or long_url (case-insensitive string)\n\n**Value formats:**\n\n- **status**: String \u2014 `\"ACTIVE\"` or `\"INACTIVE\"` (case-sensitive)\n- **createdAfter / createdBefore**: ISO 8601 datetime string (e.g., `\"2024-01-01T00:00:00Z\"`) or Unix timestamp (e.g., `1704067200`)\n- **passwordSet / maxClicksSet**: Boolean \u2014 `true` or `false`\n- **search**: String \u2014 case-insensitive search term\n\n**Examples:**\n\n- `{\"status\": \"ACTIVE\"}` \u2014 Only active URLs\n- `{\"passwordSet\": true}` \u2014 Only password-protected URLs\n- `{\"createdAfter\": \"2024-01-01T00:00:00Z\"}` \u2014 URLs created after Jan 1, 2024\n- `{\"status\": \"ACTIVE\", \"maxClicksSet\": true}` \u2014 Active URLs with click limits\n- `{\"search\": \"example\"}` \u2014 URLs containing \"example\" in alias or long_url\n- `{\"createdAfter\": \"2024-01-01\", \"createdBefore\": \"2024-12-31\", \"status\": \"ACTIVE\"}` \u2014 Active URLs from 2024",
+              "description": "JSON string containing filter criteria for URLs. Format: `{\"field\": value}`\n\n**Available filter fields:**\n\n- **status** \u2014 Filter by URL status (`\"ACTIVE\"` or `\"INACTIVE\"`)\n- **createdAfter** \u2014 Filter URLs created after this date (ISO 8601 datetime or Unix timestamp)\n- **createdBefore** \u2014 Filter URLs created before this date (ISO 8601 datetime or Unix timestamp)\n- **passwordSet** \u2014 Filter by password protection (boolean: `true`/`false`)\n- **maxClicksSet** \u2014 Filter by click limit presence (boolean: `true`/`false`)\n- **search** \u2014 Search in alias or long_url (case-insensitive string)\n- **tagIds** \u2014 Only links carrying these tags, by id (array of strings)\n- **tagNames** \u2014 Same, by tag name; unknown names match nothing\n- **tagsMatch** \u2014 `\"any\"` (default) or `\"all\"`; how multiple tags combine\n\n**Value formats:**\n\n- **status**: String \u2014 `\"ACTIVE\"` or `\"INACTIVE\"` (case-sensitive)\n- **createdAfter / createdBefore**: ISO 8601 datetime string (e.g., `\"2024-01-01T00:00:00Z\"`) or Unix timestamp (e.g., `1704067200`)\n- **passwordSet / maxClicksSet**: Boolean \u2014 `true` or `false`\n- **search**: String \u2014 case-insensitive search term\n- **tagIds / tagNames**: Array of strings\n- **tagsMatch**: String \u2014 `\"any\"` or `\"all\"`\n\n**Examples:**\n\n- `{\"status\": \"ACTIVE\"}` \u2014 Only active URLs\n- `{\"passwordSet\": true}` \u2014 Only password-protected URLs\n- `{\"createdAfter\": \"2024-01-01T00:00:00Z\"}` \u2014 URLs created after Jan 1, 2024\n- `{\"status\": \"ACTIVE\", \"maxClicksSet\": true}` \u2014 Active URLs with click limits\n- `{\"search\": \"example\"}` \u2014 URLs containing \"example\" in alias or long_url\n- `{\"tagNames\": [\"launch\", \"q3\"], \"tagsMatch\": \"all\"}` \u2014 URLs tagged both launch and q3\n- `{\"createdAfter\": \"2024-01-01\", \"createdBefore\": \"2024-12-31\", \"status\": \"ACTIVE\"}` \u2014 Active URLs from 2024",
               "examples": [
                 "{\"status\":\"ACTIVE\"}",
                 "{\"passwordSet\": true}",
@@ -2203,7 +2296,7 @@
               ],
               "title": "Filter"
             },
-            "description": "JSON string containing filter criteria for URLs. Format: `{\"field\": value}`\n\n**Available filter fields:**\n\n- **status** \u2014 Filter by URL status (`\"ACTIVE\"` or `\"INACTIVE\"`)\n- **createdAfter** \u2014 Filter URLs created after this date (ISO 8601 datetime or Unix timestamp)\n- **createdBefore** \u2014 Filter URLs created before this date (ISO 8601 datetime or Unix timestamp)\n- **passwordSet** \u2014 Filter by password protection (boolean: `true`/`false`)\n- **maxClicksSet** \u2014 Filter by click limit presence (boolean: `true`/`false`)\n- **search** \u2014 Search in alias or long_url (case-insensitive string)\n\n**Value formats:**\n\n- **status**: String \u2014 `\"ACTIVE\"` or `\"INACTIVE\"` (case-sensitive)\n- **createdAfter / createdBefore**: ISO 8601 datetime string (e.g., `\"2024-01-01T00:00:00Z\"`) or Unix timestamp (e.g., `1704067200`)\n- **passwordSet / maxClicksSet**: Boolean \u2014 `true` or `false`\n- **search**: String \u2014 case-insensitive search term\n\n**Examples:**\n\n- `{\"status\": \"ACTIVE\"}` \u2014 Only active URLs\n- `{\"passwordSet\": true}` \u2014 Only password-protected URLs\n- `{\"createdAfter\": \"2024-01-01T00:00:00Z\"}` \u2014 URLs created after Jan 1, 2024\n- `{\"status\": \"ACTIVE\", \"maxClicksSet\": true}` \u2014 Active URLs with click limits\n- `{\"search\": \"example\"}` \u2014 URLs containing \"example\" in alias or long_url\n- `{\"createdAfter\": \"2024-01-01\", \"createdBefore\": \"2024-12-31\", \"status\": \"ACTIVE\"}` \u2014 Active URLs from 2024"
+            "description": "JSON string containing filter criteria for URLs. Format: `{\"field\": value}`\n\n**Available filter fields:**\n\n- **status** \u2014 Filter by URL status (`\"ACTIVE\"` or `\"INACTIVE\"`)\n- **createdAfter** \u2014 Filter URLs created after this date (ISO 8601 datetime or Unix timestamp)\n- **createdBefore** \u2014 Filter URLs created before this date (ISO 8601 datetime or Unix timestamp)\n- **passwordSet** \u2014 Filter by password protection (boolean: `true`/`false`)\n- **maxClicksSet** \u2014 Filter by click limit presence (boolean: `true`/`false`)\n- **search** \u2014 Search in alias or long_url (case-insensitive string)\n- **tagIds** \u2014 Only links carrying these tags, by id (array of strings)\n- **tagNames** \u2014 Same, by tag name; unknown names match nothing\n- **tagsMatch** \u2014 `\"any\"` (default) or `\"all\"`; how multiple tags combine\n\n**Value formats:**\n\n- **status**: String \u2014 `\"ACTIVE\"` or `\"INACTIVE\"` (case-sensitive)\n- **createdAfter / createdBefore**: ISO 8601 datetime string (e.g., `\"2024-01-01T00:00:00Z\"`) or Unix timestamp (e.g., `1704067200`)\n- **passwordSet / maxClicksSet**: Boolean \u2014 `true` or `false`\n- **search**: String \u2014 case-insensitive search term\n- **tagIds / tagNames**: Array of strings\n- **tagsMatch**: String \u2014 `\"any\"` or `\"all\"`\n\n**Examples:**\n\n- `{\"status\": \"ACTIVE\"}` \u2014 Only active URLs\n- `{\"passwordSet\": true}` \u2014 Only password-protected URLs\n- `{\"createdAfter\": \"2024-01-01T00:00:00Z\"}` \u2014 URLs created after Jan 1, 2024\n- `{\"status\": \"ACTIVE\", \"maxClicksSet\": true}` \u2014 Active URLs with click limits\n- `{\"search\": \"example\"}` \u2014 URLs containing \"example\" in alias or long_url\n- `{\"tagNames\": [\"launch\", \"q3\"], \"tagsMatch\": \"all\"}` \u2014 URLs tagged both launch and q3\n- `{\"createdAfter\": \"2024-01-01\", \"createdBefore\": \"2024-12-31\", \"status\": \"ACTIVE\"}` \u2014 Active URLs from 2024"
           },
           {
             "name": "filterBy",
@@ -2644,7 +2737,7 @@
           "Link Management"
         ],
         "summary": "Delete URL",
-        "description": "Delete a URL permanently.\n\n**This action is IRREVERSIBLE.** The URL, its alias, and all associated\nclick analytics data will be permanently deleted. The alias may be reclaimed\nby another user afterward.\n\n**Authentication**: Required \u2014 you must own the URL.\n\n**API Key Scope**: `urls:manage` or `admin:all`\n\n**Rate Limits**: 60/min, 1,000/day\n\n**Recommendation**: Consider setting the URL status to `INACTIVE` via\n`PATCH /urls/{url_id}/status` instead if you may want to restore it later.",
+        "description": "Delete a URL permanently.\n\n**This action is IRREVERSIBLE.** The URL and its alias are permanently\ndeleted, and the alias may be reclaimed by another user afterward.\nHistorical click analytics are not removed; they are erased when the\nowning account is deleted.\n\n**Authentication**: Required \u2014 you must own the URL.\n\n**API Key Scope**: `urls:manage` or `admin:all`\n\n**Rate Limits**: 60/min, 1,000/day\n\n**Recommendation**: Consider setting the URL status to `INACTIVE` via\n`PATCH /urls/{url_id}/status` instead if you may want to restore it later.",
         "operationId": "deleteUrl",
         "parameters": [
           {
@@ -3218,6 +3311,464 @@
         }
       }
     },
+    "/api/v1/urls/bulk/tags": {
+      "post": {
+        "tags": [
+          "Link Management"
+        ],
+        "summary": "Bulk Tag URLs",
+        "description": "Add and remove tags (by tag id) on up to 100 URLs you own in one request.\n\nPer item the result is the link's current tags minus `remove`, plus\n`add` (kept once, order preserved). A link that already reads that\nway is a success no-op. Every id in `add` must be one of your tags\n(`GET /tags`); an unknown one rejects the whole request before any\nitem is touched.\n\n**Per-item verdicts** (`error_code`): `not_found` \u2014 no such URL in\nyour account; `forbidden` \u2014 the URL is admin-blocked;\n`validation_error` \u2014 the result would exceed 10 tags on that link.\n\n**Retry semantics**: re-sending the batch is safe \u2014 items already\ncarrying the result report success no-ops.\n\n**Rate Limits**: 60/min, 200/day \u2014 counted per request, not per id.",
+        "operationId": "bulkTagUrls",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkTagUrlsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkUrlOperationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request \u2014 invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient permissions or scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tags": {
+      "get": {
+        "tags": [
+          "Tags"
+        ],
+        "summary": "List Your Tags",
+        "description": "Every tag in your account with the number of links carrying it,\noldest first.\n\n**API Key Scope**: `urls:manage`, `urls:read`, or `admin:all`\n\n**Rate Limits**: 60/min, 5,000/day",
+        "operationId": "listTags",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request \u2014 invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient permissions or scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Tags"
+        ],
+        "summary": "Create a Tag",
+        "description": "Create a tag. Names are lowercased and trimmed; a name you already\nhave answers `409 conflict`. Omit `color` to get the least-used palette\ncolour in your account; omit `icon` for the generic tag glyph. At most\n500 tags per account.\n\n**API Key Scope**: `urls:manage` or `admin:all`\n\n**Rate Limits**: 30/min",
+        "operationId": "createTag",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request \u2014 invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient permissions or scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tags/{tag_id}": {
+      "patch": {
+        "tags": [
+          "Tags"
+        ],
+        "summary": "Rename or Recolour a Tag",
+        "description": "Change the name, colour or icon. Links keep pointing at the tag\nby id, so a rename shows up everywhere at once. Renaming onto a name you\nalready have answers `409 conflict`.\n\n**API Key Scope**: `urls:manage` or `admin:all`\n\n**Rate Limits**: 30/min",
+        "operationId": "updateTag",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Tag id (MongoDB ObjectId), as returned by GET /tags.",
+              "examples": [
+                "665f0c2f9e7a4b1d2c3d4e5f"
+              ],
+              "title": "Tag Id"
+            },
+            "description": "Tag id (MongoDB ObjectId), as returned by GET /tags."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTagRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request \u2014 invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient permissions or scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Tags"
+        ],
+        "summary": "Delete a Tag",
+        "description": "Delete the tag and remove it from every link that carried it. The\nlinks themselves are untouched otherwise.\n\n**API Key Scope**: `urls:manage` or `admin:all`\n\n**Rate Limits**: 10/min. Deleting fans out an update over every link\nyou own, so it carries the same budget as bulk delete.",
+        "operationId": "deleteTag",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Tag id (MongoDB ObjectId), as returned by GET /tags.",
+              "examples": [
+                "665f0c2f9e7a4b1d2c3d4e5f"
+              ],
+              "title": "Tag Id"
+            },
+            "description": "Tag id (MongoDB ObjectId), as returned by GET /tags."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request \u2014 invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient permissions or scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/urls/claim": {
       "post": {
         "tags": [
@@ -3559,14 +4110,14 @@
                   "type": "null"
                 }
               ],
-              "description": "**Method 1: JSON Filters Object**\n\nJSON string containing dimension filters. Format: `{\"dimension\": [\"value1\", \"value2\"]}`\n\n**Available filter dimensions:**\n\n- `browser` \u2014 Filter by browser name (e.g., Chrome, Firefox, Safari, Edge)\n- `os` \u2014 Filter by operating system (e.g., Windows, macOS, Linux, iOS, Android)\n- `device` \u2014 Filter by device type (`mobile`, `tablet`, `desktop`, `unknown`)\n- `country` \u2014 Filter by country name (e.g., United States, Canada, Germany)\n- `city` \u2014 Filter by city name (e.g., New York, London, Mumbai)\n- `referrer` \u2014 Filter by referrer URL (e.g., https://google.com, https://twitter.com)\n- `short_code` \u2014 Filter by URL alias (e.g., mylink, promo2024)\n- `url_id` \u2014 Filter by URL id (MongoDB ObjectId); ids you do not own match nothing\n- `utm_source` / `utm_medium` / `utm_campaign` \u2014 Filter by campaign tags; `(none)` matches untagged clicks\n\n**Value format:** Array of strings for each dimension.\n\n**Important:** Filter values are case-sensitive. Use exact capitalization as stored in the database.\n\n**Examples:**\n\n- `{\"browser\": [\"Chrome\", \"Firefox\"]}` \u2014 Chrome OR Firefox clicks\n- `{\"country\": [\"United States\", \"Canada\"], \"browser\": [\"Chrome\"]}` \u2014 US/CA clicks from Chrome\n- `{\"short_code\": [\"link1\", \"link2\"]}` \u2014 Stats for specific URLs\n\n**Alternative:** You can also pass filters as individual query parameters (see `browser`, `os`, `country`, `city`, `referrer` parameters below).",
+              "description": "**Method 1: JSON Filters Object**\n\nJSON string containing dimension filters. Format: `{\"dimension\": [\"value1\", \"value2\"]}`\n\n**Available filter dimensions:**\n\n- `browser` \u2014 Filter by browser name (e.g., Chrome, Firefox, Safari, Edge)\n- `os` \u2014 Filter by operating system (e.g., Windows, macOS, Linux, iOS, Android)\n- `device` \u2014 Filter by device type (`mobile`, `tablet`, `desktop`, `unknown`)\n- `country` \u2014 Filter by country name (e.g., United States, Canada, Germany)\n- `city` \u2014 Filter by city name (e.g., New York, London, Mumbai)\n- `referrer` \u2014 Filter by referrer URL (e.g., https://google.com, https://twitter.com)\n- `short_code` \u2014 Filter by URL alias (e.g., mylink, promo2024)\n- `url_id` \u2014 Filter by URL id (MongoDB ObjectId); ids you do not own match nothing\n- `tag` / `tag_id` \u2014 Filter by link tag (name or id); clicks on your links carrying any listed tag\n- `utm_source` / `utm_medium` / `utm_campaign` \u2014 Filter by campaign tags; `(none)` matches untagged clicks\n\n**Value format:** Array of strings for each dimension.\n\n**Important:** Filter values are case-sensitive. Use exact capitalization as stored in the database.\n\n**Examples:**\n\n- `{\"browser\": [\"Chrome\", \"Firefox\"]}` \u2014 Chrome OR Firefox clicks\n- `{\"country\": [\"United States\", \"Canada\"], \"browser\": [\"Chrome\"]}` \u2014 US/CA clicks from Chrome\n- `{\"short_code\": [\"link1\", \"link2\"]}` \u2014 Stats for specific URLs\n\n**Alternative:** You can also pass filters as individual query parameters (see `browser`, `os`, `country`, `city`, `referrer` parameters below).",
               "examples": [
                 "{\"browser\":[\"Chrome\",\"Firefox\"]}",
                 "{\"country\":[\"United States\",\"Canada\"],\"browser\":[\"Chrome\"]}"
               ],
               "title": "Filters"
             },
-            "description": "**Method 1: JSON Filters Object**\n\nJSON string containing dimension filters. Format: `{\"dimension\": [\"value1\", \"value2\"]}`\n\n**Available filter dimensions:**\n\n- `browser` \u2014 Filter by browser name (e.g., Chrome, Firefox, Safari, Edge)\n- `os` \u2014 Filter by operating system (e.g., Windows, macOS, Linux, iOS, Android)\n- `device` \u2014 Filter by device type (`mobile`, `tablet`, `desktop`, `unknown`)\n- `country` \u2014 Filter by country name (e.g., United States, Canada, Germany)\n- `city` \u2014 Filter by city name (e.g., New York, London, Mumbai)\n- `referrer` \u2014 Filter by referrer URL (e.g., https://google.com, https://twitter.com)\n- `short_code` \u2014 Filter by URL alias (e.g., mylink, promo2024)\n- `url_id` \u2014 Filter by URL id (MongoDB ObjectId); ids you do not own match nothing\n- `utm_source` / `utm_medium` / `utm_campaign` \u2014 Filter by campaign tags; `(none)` matches untagged clicks\n\n**Value format:** Array of strings for each dimension.\n\n**Important:** Filter values are case-sensitive. Use exact capitalization as stored in the database.\n\n**Examples:**\n\n- `{\"browser\": [\"Chrome\", \"Firefox\"]}` \u2014 Chrome OR Firefox clicks\n- `{\"country\": [\"United States\", \"Canada\"], \"browser\": [\"Chrome\"]}` \u2014 US/CA clicks from Chrome\n- `{\"short_code\": [\"link1\", \"link2\"]}` \u2014 Stats for specific URLs\n\n**Alternative:** You can also pass filters as individual query parameters (see `browser`, `os`, `country`, `city`, `referrer` parameters below)."
+            "description": "**Method 1: JSON Filters Object**\n\nJSON string containing dimension filters. Format: `{\"dimension\": [\"value1\", \"value2\"]}`\n\n**Available filter dimensions:**\n\n- `browser` \u2014 Filter by browser name (e.g., Chrome, Firefox, Safari, Edge)\n- `os` \u2014 Filter by operating system (e.g., Windows, macOS, Linux, iOS, Android)\n- `device` \u2014 Filter by device type (`mobile`, `tablet`, `desktop`, `unknown`)\n- `country` \u2014 Filter by country name (e.g., United States, Canada, Germany)\n- `city` \u2014 Filter by city name (e.g., New York, London, Mumbai)\n- `referrer` \u2014 Filter by referrer URL (e.g., https://google.com, https://twitter.com)\n- `short_code` \u2014 Filter by URL alias (e.g., mylink, promo2024)\n- `url_id` \u2014 Filter by URL id (MongoDB ObjectId); ids you do not own match nothing\n- `tag` / `tag_id` \u2014 Filter by link tag (name or id); clicks on your links carrying any listed tag\n- `utm_source` / `utm_medium` / `utm_campaign` \u2014 Filter by campaign tags; `(none)` matches untagged clicks\n\n**Value format:** Array of strings for each dimension.\n\n**Important:** Filter values are case-sensitive. Use exact capitalization as stored in the database.\n\n**Examples:**\n\n- `{\"browser\": [\"Chrome\", \"Firefox\"]}` \u2014 Chrome OR Firefox clicks\n- `{\"country\": [\"United States\", \"Canada\"], \"browser\": [\"Chrome\"]}` \u2014 US/CA clicks from Chrome\n- `{\"short_code\": [\"link1\", \"link2\"]}` \u2014 Stats for specific URLs\n\n**Alternative:** You can also pass filters as individual query parameters (see `browser`, `os`, `country`, `city`, `referrer` parameters below)."
           },
           {
             "name": "browser",
@@ -3809,6 +4360,50 @@
               "title": "Url Id"
             },
             "description": "Comma-separated URL ids (MongoDB ObjectIds) to filter stats to specific URLs you own. Slices your own aggregate \u2014 ids you do not own simply match nothing.\n\nFor statistics on a single link, prefer `GET /api/v1/stats/links/{url_id}`."
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated tag names. Scopes the aggregate to clicks on your links carrying at least one of them (resolved to link ids at query time, so a tag added today covers the link's whole click history). Filter only: `tag` is not a `group_by` dimension. See also `tag_id`.",
+              "examples": [
+                "launch,q3"
+              ],
+              "title": "Tag"
+            },
+            "description": "Comma-separated tag names. Scopes the aggregate to clicks on your links carrying at least one of them (resolved to link ids at query time, so a tag added today covers the link's whole click history). Filter only: `tag` is not a `group_by` dimension. See also `tag_id`."
+          },
+          {
+            "name": "tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated tag ids (from `GET /api/v1/tags`). Same scope as `tag`, by id. Filter only.",
+              "examples": [
+                "665f0c2f9e7a4b1d2c3d4e5f"
+              ],
+              "title": "Tag Id"
+            },
+            "description": "Comma-separated tag ids (from `GET /api/v1/tags`). Same scope as `tag`, by id. Filter only."
           }
         ],
         "responses": {
@@ -4798,14 +5393,14 @@
                   "type": "null"
                 }
               ],
-              "description": "**Method 1: JSON Filters Object**\n\nJSON string containing dimension filters. Format: `{\"dimension\": [\"value1\", \"value2\"]}`\n\n**Available filter dimensions:**\n\n- `browser` \u2014 Filter by browser name (e.g., Chrome, Firefox, Safari, Edge)\n- `os` \u2014 Filter by operating system (e.g., Windows, macOS, Linux, iOS, Android)\n- `device` \u2014 Filter by device type (`mobile`, `tablet`, `desktop`, `unknown`)\n- `country` \u2014 Filter by country name (e.g., United States, Canada, Germany)\n- `city` \u2014 Filter by city name (e.g., New York, London, Mumbai)\n- `referrer` \u2014 Filter by referrer URL (e.g., https://google.com, https://twitter.com)\n- `short_code` \u2014 Filter by URL alias (e.g., mylink, promo2024)\n- `url_id` \u2014 Filter by URL id (MongoDB ObjectId); ids you do not own match nothing\n- `utm_source` / `utm_medium` / `utm_campaign` \u2014 Filter by campaign tags; `(none)` matches untagged clicks\n\n**Value format:** Array of strings for each dimension.\n\n**Important:** Filter values are case-sensitive. Use exact capitalization as stored in the database.\n\n**Examples:**\n\n- `{\"browser\": [\"Chrome\", \"Firefox\"]}` \u2014 Chrome OR Firefox clicks\n- `{\"country\": [\"United States\", \"Canada\"], \"browser\": [\"Chrome\"]}` \u2014 US/CA clicks from Chrome\n- `{\"short_code\": [\"link1\", \"link2\"]}` \u2014 Stats for specific URLs\n\n**Alternative:** You can also pass filters as individual query parameters (see `browser`, `os`, `country`, `city`, `referrer` parameters below).",
+              "description": "**Method 1: JSON Filters Object**\n\nJSON string containing dimension filters. Format: `{\"dimension\": [\"value1\", \"value2\"]}`\n\n**Available filter dimensions:**\n\n- `browser` \u2014 Filter by browser name (e.g., Chrome, Firefox, Safari, Edge)\n- `os` \u2014 Filter by operating system (e.g., Windows, macOS, Linux, iOS, Android)\n- `device` \u2014 Filter by device type (`mobile`, `tablet`, `desktop`, `unknown`)\n- `country` \u2014 Filter by country name (e.g., United States, Canada, Germany)\n- `city` \u2014 Filter by city name (e.g., New York, London, Mumbai)\n- `referrer` \u2014 Filter by referrer URL (e.g., https://google.com, https://twitter.com)\n- `short_code` \u2014 Filter by URL alias (e.g., mylink, promo2024)\n- `url_id` \u2014 Filter by URL id (MongoDB ObjectId); ids you do not own match nothing\n- `tag` / `tag_id` \u2014 Filter by link tag (name or id); clicks on your links carrying any listed tag\n- `utm_source` / `utm_medium` / `utm_campaign` \u2014 Filter by campaign tags; `(none)` matches untagged clicks\n\n**Value format:** Array of strings for each dimension.\n\n**Important:** Filter values are case-sensitive. Use exact capitalization as stored in the database.\n\n**Examples:**\n\n- `{\"browser\": [\"Chrome\", \"Firefox\"]}` \u2014 Chrome OR Firefox clicks\n- `{\"country\": [\"United States\", \"Canada\"], \"browser\": [\"Chrome\"]}` \u2014 US/CA clicks from Chrome\n- `{\"short_code\": [\"link1\", \"link2\"]}` \u2014 Stats for specific URLs\n\n**Alternative:** You can also pass filters as individual query parameters (see `browser`, `os`, `country`, `city`, `referrer` parameters below).",
               "examples": [
                 "{\"browser\":[\"Chrome\",\"Firefox\"]}",
                 "{\"country\":[\"United States\",\"Canada\"],\"browser\":[\"Chrome\"]}"
               ],
               "title": "Filters"
             },
-            "description": "**Method 1: JSON Filters Object**\n\nJSON string containing dimension filters. Format: `{\"dimension\": [\"value1\", \"value2\"]}`\n\n**Available filter dimensions:**\n\n- `browser` \u2014 Filter by browser name (e.g., Chrome, Firefox, Safari, Edge)\n- `os` \u2014 Filter by operating system (e.g., Windows, macOS, Linux, iOS, Android)\n- `device` \u2014 Filter by device type (`mobile`, `tablet`, `desktop`, `unknown`)\n- `country` \u2014 Filter by country name (e.g., United States, Canada, Germany)\n- `city` \u2014 Filter by city name (e.g., New York, London, Mumbai)\n- `referrer` \u2014 Filter by referrer URL (e.g., https://google.com, https://twitter.com)\n- `short_code` \u2014 Filter by URL alias (e.g., mylink, promo2024)\n- `url_id` \u2014 Filter by URL id (MongoDB ObjectId); ids you do not own match nothing\n- `utm_source` / `utm_medium` / `utm_campaign` \u2014 Filter by campaign tags; `(none)` matches untagged clicks\n\n**Value format:** Array of strings for each dimension.\n\n**Important:** Filter values are case-sensitive. Use exact capitalization as stored in the database.\n\n**Examples:**\n\n- `{\"browser\": [\"Chrome\", \"Firefox\"]}` \u2014 Chrome OR Firefox clicks\n- `{\"country\": [\"United States\", \"Canada\"], \"browser\": [\"Chrome\"]}` \u2014 US/CA clicks from Chrome\n- `{\"short_code\": [\"link1\", \"link2\"]}` \u2014 Stats for specific URLs\n\n**Alternative:** You can also pass filters as individual query parameters (see `browser`, `os`, `country`, `city`, `referrer` parameters below)."
+            "description": "**Method 1: JSON Filters Object**\n\nJSON string containing dimension filters. Format: `{\"dimension\": [\"value1\", \"value2\"]}`\n\n**Available filter dimensions:**\n\n- `browser` \u2014 Filter by browser name (e.g., Chrome, Firefox, Safari, Edge)\n- `os` \u2014 Filter by operating system (e.g., Windows, macOS, Linux, iOS, Android)\n- `device` \u2014 Filter by device type (`mobile`, `tablet`, `desktop`, `unknown`)\n- `country` \u2014 Filter by country name (e.g., United States, Canada, Germany)\n- `city` \u2014 Filter by city name (e.g., New York, London, Mumbai)\n- `referrer` \u2014 Filter by referrer URL (e.g., https://google.com, https://twitter.com)\n- `short_code` \u2014 Filter by URL alias (e.g., mylink, promo2024)\n- `url_id` \u2014 Filter by URL id (MongoDB ObjectId); ids you do not own match nothing\n- `tag` / `tag_id` \u2014 Filter by link tag (name or id); clicks on your links carrying any listed tag\n- `utm_source` / `utm_medium` / `utm_campaign` \u2014 Filter by campaign tags; `(none)` matches untagged clicks\n\n**Value format:** Array of strings for each dimension.\n\n**Important:** Filter values are case-sensitive. Use exact capitalization as stored in the database.\n\n**Examples:**\n\n- `{\"browser\": [\"Chrome\", \"Firefox\"]}` \u2014 Chrome OR Firefox clicks\n- `{\"country\": [\"United States\", \"Canada\"], \"browser\": [\"Chrome\"]}` \u2014 US/CA clicks from Chrome\n- `{\"short_code\": [\"link1\", \"link2\"]}` \u2014 Stats for specific URLs\n\n**Alternative:** You can also pass filters as individual query parameters (see `browser`, `os`, `country`, `city`, `referrer` parameters below)."
           },
           {
             "name": "browser",
@@ -5048,6 +5643,50 @@
               "title": "Url Id"
             },
             "description": "Comma-separated URL ids (MongoDB ObjectIds) to filter stats to specific URLs you own. Slices your own aggregate \u2014 ids you do not own simply match nothing.\n\nFor statistics on a single link, prefer `GET /api/v1/stats/links/{url_id}`."
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated tag names. Scopes the aggregate to clicks on your links carrying at least one of them (resolved to link ids at query time, so a tag added today covers the link's whole click history). Filter only: `tag` is not a `group_by` dimension. See also `tag_id`.",
+              "examples": [
+                "launch,q3"
+              ],
+              "title": "Tag"
+            },
+            "description": "Comma-separated tag names. Scopes the aggregate to clicks on your links carrying at least one of them (resolved to link ids at query time, so a tag added today covers the link's whole click history). Filter only: `tag` is not a `group_by` dimension. See also `tag_id`."
+          },
+          {
+            "name": "tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated tag ids (from `GET /api/v1/tags`). Same scope as `tag`, by id. Filter only.",
+              "examples": [
+                "665f0c2f9e7a4b1d2c3d4e5f"
+              ],
+              "title": "Tag Id"
+            },
+            "description": "Comma-separated tag ids (from `GET /api/v1/tags`). Same scope as `tag`, by id. Filter only."
           }
         ],
         "responses": {
@@ -6727,7 +7366,7 @@
           "Metadata"
         ],
         "summary": "Fetch Destination Meta Tags",
-        "description": "Fetch a destination page and return its existing meta tags.\n\nUse this to prefill ``meta_tags`` before customizing a link's social\npreview. Returns normalized best-pick fields (og \u2192 twitter \u2192 html\nfallbacks) plus the raw ``og``/``twitter`` tag families.\n\n**Authentication**: Required. **API Key Scope**: `urls:read`,\n`urls:manage`, or `admin:all`.\n\n**Feature gate**: `custom_meta_tags` must be enabled for the calling\naccount \u2014 this endpoint only exists to feed that feature.\n\n**Rate Limits**: 20/min, 500/day \u2014 results are cached ~1h server-side,\nso repeat calls for the same URL are cheap and don't refetch.",
+        "description": "Fetch a destination page and return its existing meta tags.\n\nUse this to prefill ``meta_tags`` before customizing a link's social\npreview, or to check how a page will unfurl. Returns normalized\nbest-pick fields (og \u2192 twitter \u2192 html fallbacks) plus the raw\n``og``/``twitter`` tag families.\n\n**Authentication**: Optional. Authenticated callers get the higher\nper-account limit; anonymous calls are limited per IP. **API Key\nScope** (when authenticating): `urls:read`, `urls:manage`, or\n`admin:all`.\n\n**Rate Limits**: 60/min, 2,000/day authenticated; 15/min, 300/day\nanonymous \u2014 results are cached ~1h server-side, so repeat calls for\nthe same URL are cheap and don't refetch.",
         "operationId": "getUrlMetadata",
         "parameters": [
           {
@@ -6753,6 +7392,323 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MetadataResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request \u2014 invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient permissions or scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {},
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "JWTAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/expand": {
+      "get": {
+        "tags": [
+          "Metadata"
+        ],
+        "summary": "Expand a Short Link",
+        "description": "Follow a URL's redirect chain and return every hop in order.\n\nWorks on links from any shortener. Bodies are never fetched \u2014 only\neach hop's status and Location header \u2014 and results are cached ~1h\nserver-side, so repeat calls for the same URL don't refetch.\n\n**Authentication**: None required. Authenticated callers get the\nhigher per-account rate limit; anonymous calls are limited per IP.\n\n**Rate Limits**: 60/min, 2,000/day authenticated; 15/min, 300/day\nanonymous.",
+        "operationId": "expandUrl",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 2048,
+              "description": "Short or redirecting URL to follow, http or https.",
+              "examples": [
+                "https://spoo.me/example"
+              ],
+              "title": "Url"
+            },
+            "description": "Short or redirecting URL to follow, http or https."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpandResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request \u2014 invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient permissions or scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {},
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "JWTAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/domain-intel": {
+      "get": {
+        "tags": [
+          "Metadata"
+        ],
+        "summary": "Domain Records",
+        "description": "DNS records, registration data, and TLS certificate of a host.\n\nRegistration comes from the registry's own RDAP server; ``age_days``\nis the strongest quick signal (freshly registered domains are the\nphishing tell). Results are cached ~24h server-side.\n\n**Authentication**: None required. Authenticated callers get the\nhigher per-account rate limit; anonymous calls are limited per IP.\n\n**Rate Limits**: 60/min, 2,000/day authenticated; 15/min, 300/day\nanonymous.",
+        "operationId": "getDomainIntel",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 253,
+              "description": "Hostname to look up (no scheme or path).",
+              "examples": [
+                "github.com"
+              ],
+              "title": "Host"
+            },
+            "description": "Hostname to look up (no scheme or path)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainIntelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request \u2014 invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient permissions or scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {},
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "JWTAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me": {
+      "delete": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Delete Account",
+        "description": "Request permanent account deletion (GDPR Art. 17).\n\nRe-authentication is required: accounts with a password send\n``password``; OAuth-only accounts confirm by typing their exact\naccount email as ``confirm_email``. On success the account enters a\ngrace period (7 days by default) and `purge_after` marks its end \u2014\nafter that instant a background sweep permanently erases the account,\nits links, and their analytics.\n\nDuring the grace period every login is blocked with error code\n``ACCOUNT_PENDING_DELETION``; ``POST /auth/restore`` cancels the\ndeletion and reactivates the account \u2014 with email + password, or with\nthe one-shot link mailed on this request (the OAuth-only path).\n\n**Authentication**: Required (JWT only \u2014 API keys and app tokens\ncannot delete the account)\n\n**Rate Limits**: 3/hour\n\n**Errors**: 403 when re-authentication fails (never says which field\nwas wrong), 409 when deletion is already pending.",
+        "operationId": "deleteMyAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletionResponse"
                 }
               }
             }
@@ -8893,6 +9849,24 @@
   },
   "components": {
     "schemas": {
+      "AccountDeletionResponse": {
+        "properties": {
+          "purge_after": {
+            "type": "string",
+            "title": "Purge After",
+            "description": "When the grace period ends and the erasure sweep may pick the account up. Restoring before this instant cancels the deletion.",
+            "examples": [
+              "2026-08-26T00:00:00+00:00"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "purge_after"
+        ],
+        "title": "AccountDeletionResponse",
+        "description": "Deletion accepted \u2014 the account is now pending erasure."
+      },
       "AliasCheckResponse": {
         "properties": {
           "available": {
@@ -9568,6 +10542,59 @@
         "title": "BulkOperationSummary",
         "description": "Counts derived from the result rows."
       },
+      "BulkTagUrlsRequest": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Ids",
+            "description": "URL ids (MongoDB ObjectIds, as returned by the list endpoint). 1 to 100 per request; duplicates are deduplicated server-side (first occurrence wins). One malformed id rejects the whole request \u2014 nothing is attempted.",
+            "examples": [
+              [
+                "665f0c2f9e7a4b1d2c3d4e5f",
+                "665f0c2f9e7a4b1d2c3d4e60"
+              ]
+            ]
+          },
+          "add": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Add",
+            "description": "Tag ids to add to every id (at most 10); every one must be a tag you own. Tags a link already carries are kept once.",
+            "examples": [
+              [
+                "665f0c2f9e7a4b1d2c3d4e5f"
+              ]
+            ]
+          },
+          "remove": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Remove",
+            "description": "Tag ids to remove from every id. Tags a link does not carry are ignored.",
+            "examples": [
+              [
+                "665f0c2f9e7a4b1d2c3d4e60"
+              ]
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "title": "BulkTagUrlsRequest",
+        "description": "Request body for bulk tag / untag, by tag id.\n\nAt least one of ``add`` or ``remove`` must name a tag, and no tag may be\nin both."
+      },
       "BulkUpdateExpiryRequest": {
         "properties": {
           "ids": {
@@ -9739,6 +10766,36 @@
         ],
         "title": "BulkUrlResultRow",
         "description": "Per-item verdict.\n\n``error_code`` reuses the API's error-code slugs so clients share\none mapping with the single-item routes: ``not_found`` (no such URL\nin your account \u2014 someone else's id answers the same, deliberately),\n``forbidden`` (blocked link), ``conflict``, ``validation_error``,\nplus ``internal`` (unexpected per-item failure, logged server-side)\nand ``not_attempted`` (processing aborted before this item).\n``error`` is display-safe but not stable; ``error_code`` is the key\nto branch on."
+      },
+      "ChainHop": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status",
+            "description": "HTTP status; null when the hop never answered."
+          },
+          "https": {
+            "type": "boolean",
+            "title": "Https"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "https"
+        ],
+        "title": "ChainHop"
       },
       "ClaimItemRequest": {
         "properties": {
@@ -10056,6 +11113,46 @@
         "title": "CreateReportsRequest",
         "description": "Request body for POST /api/v1/reports.\n\n``items`` size is validated in the service (anonymous \u2264 25,\nauthenticated \u2264 100; empty \u2192 400) because the cap depends on the\ncaller's auth state."
       },
+      "CreateTagRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Name",
+            "description": "Tag name, at most 32 characters. Lowercased and trimmed on write; letters, digits, spaces, `-`, `_` and `.` only. Unique per account.",
+            "examples": [
+              "launch"
+            ]
+          },
+          "color": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TagColor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of the palette keys. Omit on create to get the least-used colour in your account.",
+            "examples": [
+              "violet"
+            ]
+          },
+          "icon": {
+            "$ref": "#/components/schemas/TagIcon",
+            "description": "Icon key from the curated set (lucide names). Defaults to `tag`.",
+            "default": "tag",
+            "examples": [
+              "rocket"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "CreateTagRequest"
+      },
       "CreateUrlRequest": {
         "properties": {
           "long_url": {
@@ -10207,6 +11304,26 @@
                 "IN": "https://example.in/",
                 "US": "https://example.com/us"
               }
+            ]
+          },
+          "tag_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag Ids",
+            "description": "Ids of tags from `GET /api/v1/tags`, at most 10 per link. Every id must be one of your tags (400 otherwise). On PATCH the list replaces the stored one; `null` or `[]` clears it.",
+            "examples": [
+              [
+                "665f0c2f9e7a4b1d2c3d4e5f"
+              ]
             ]
           },
           "meta_tags": {
@@ -10485,6 +11602,45 @@
         "title": "CustomDomainResponse",
         "description": "A single custom domain \u2014 covers create, get, verify, and list responses."
       },
+      "DeleteAccountRequest": {
+        "properties": {
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password",
+            "description": "Account password \u2014 re-auth for accounts with a password set",
+            "examples": [
+              "MySecurePass123!"
+            ]
+          },
+          "confirm_email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 320
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm Email",
+            "description": "The exact account email, typed to confirm \u2014 re-auth for OAuth-only accounts (no password set)",
+            "examples": [
+              "user@example.com"
+            ]
+          }
+        },
+        "type": "object",
+        "title": "DeleteAccountRequest",
+        "description": "Request body for DELETE /api/v1/me.\n\nExactly one re-auth proof applies per account: ``password`` for\naccounts with a password set, ``confirm_email`` (the exact account\nemail, typed) for OAuth-only accounts. The wrong proof \u2014 or a missing\none \u2014 fails re-authentication; the response never says which."
+      },
       "DeleteUrlResponse": {
         "properties": {
           "message": {
@@ -10742,6 +11898,130 @@
         "title": "DnsRecord",
         "description": "One DNS record the user must publish to complete setup."
       },
+      "DomainIntelResponse": {
+        "properties": {
+          "host": {
+            "type": "string",
+            "title": "Host"
+          },
+          "registrable_domain": {
+            "type": "string",
+            "title": "Registrable Domain"
+          },
+          "dns": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Dns"
+          },
+          "whois": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DomainWhois"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ssl": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DomainSsl"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fetched_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fetched At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "host",
+          "registrable_domain",
+          "dns",
+          "fetched_at"
+        ],
+        "title": "DomainIntelResponse",
+        "description": "Public records of a destination host: DNS, RDAP registration, TLS.\n\n``whois``/``ssl`` are null when the registry or handshake doesn't\nanswer \u2014 absence of data, never a verdict."
+      },
+      "DomainSsl": {
+        "properties": {
+          "issuer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid To"
+          },
+          "days_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Left"
+          },
+          "sans": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sans"
+          }
+        },
+        "type": "object",
+        "title": "DomainSsl"
+      },
       "DomainStatus": {
         "type": "string",
         "enum": [
@@ -10753,6 +12033,68 @@
         ],
         "title": "DomainStatus",
         "description": "Lifecycle state of a custom domain registration."
+      },
+      "DomainWhois": {
+        "properties": {
+          "registrar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registrar"
+          },
+          "created": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created"
+          },
+          "updated": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated"
+          },
+          "expires": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires"
+          },
+          "age_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Days",
+            "description": "Days since registration; young = suspect."
+          }
+        },
+        "type": "object",
+        "title": "DomainWhois"
       },
       "EmojiEntry": {
         "properties": {
@@ -10926,6 +12268,73 @@
           "event_types"
         ],
         "title": "EventTypesResponse"
+      },
+      "ExpandResponse": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "The URL that was requested."
+          },
+          "final_url": {
+            "type": "string",
+            "title": "Final Url"
+          },
+          "final_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Status"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "description": "Chain stopped at the redirect cap."
+          },
+          "hops": {
+            "items": {
+              "$ref": "#/components/schemas/ChainHop"
+            },
+            "type": "array",
+            "title": "Hops"
+          },
+          "blocklist_match": {
+            "type": "boolean",
+            "title": "Blocklist Match"
+          },
+          "web_risk": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WebRiskVerdict"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Google Web Risk verdict for the final URL; null when the check didn't run."
+          },
+          "fetched_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fetched At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "final_url",
+          "truncated",
+          "hops",
+          "blocklist_match",
+          "fetched_at"
+        ],
+        "title": "ExpandResponse",
+        "description": "A URL's redirect chain, every hop listed in order.\n\n``blocklist_match`` is the only safety claim: whether any hop matches\nthe abuse blocklist spoo.me enforces at link creation."
       },
       "FeatureState": {
         "type": "string",
@@ -11470,6 +12879,42 @@
               }
             ],
             "title": "Site Name"
+          },
+          "html_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html Title",
+            "description": "Raw <title> text, before og/twitter fallbacks."
+          },
+          "html_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html Description",
+            "description": "Plain <meta name=description>, unnormalized."
+          },
+          "favicon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Favicon",
+            "description": "Best declared icon (or /favicon.ico); absolute https URL."
           },
           "og": {
             "additionalProperties": {
@@ -12338,6 +13783,59 @@
         "title": "ResetPasswordRequest",
         "description": "Request body for POST /auth/reset-password."
       },
+      "RestoreAccountRequest": {
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email",
+            "description": "Account email address (credential restore)",
+            "examples": [
+              "user@example.com"
+            ]
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password",
+            "description": "Account password (credential restore)",
+            "examples": [
+              "MySecurePass123!"
+            ]
+          },
+          "restore_token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restore Token",
+            "description": "One-shot restore token from the deletion notice email (token restore \u2014 OAuth-only accounts)"
+          }
+        },
+        "type": "object",
+        "title": "RestoreAccountRequest",
+        "description": "Request body for POST /auth/restore.\n\nExactly one restore proof: ``email`` + ``password`` for accounts with\na password, or ``restore_token`` (the one-shot token from the\ndeletion notice email \u2014 the only path for OAuth-only accounts).\nMixing or omitting both is a validation error, not a 403."
+      },
       "SendVerificationResponse": {
         "properties": {
           "success": {
@@ -12607,6 +14105,253 @@
         "title": "StatsTimeRange",
         "description": "Time range metadata inside StatsResponse."
       },
+      "TagColor": {
+        "type": "string",
+        "enum": [
+          "gray",
+          "red",
+          "orange",
+          "amber",
+          "green",
+          "teal",
+          "blue",
+          "violet",
+          "pink"
+        ],
+        "title": "TagColor",
+        "description": "Fixed palette; the dashboard maps each key to a muted dot colour."
+      },
+      "TagDeleteResponse": {
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "title": "Deleted",
+            "default": true
+          },
+          "links_updated": {
+            "type": "integer",
+            "title": "Links Updated",
+            "description": "Links the tag was removed from."
+          }
+        },
+        "type": "object",
+        "required": [
+          "links_updated"
+        ],
+        "title": "TagDeleteResponse"
+      },
+      "TagIcon": {
+        "type": "string",
+        "enum": [
+          "banknote",
+          "bar-chart-3",
+          "beaker",
+          "bell",
+          "bird",
+          "book",
+          "bookmark",
+          "box",
+          "briefcase",
+          "bug",
+          "building",
+          "calendar",
+          "camera",
+          "car",
+          "cat",
+          "clock",
+          "cloud",
+          "code",
+          "coffee",
+          "compass",
+          "credit-card",
+          "crown",
+          "dog",
+          "file-text",
+          "fish",
+          "flag",
+          "flame",
+          "flask-conical",
+          "folder",
+          "gamepad-2",
+          "gem",
+          "ghost",
+          "gift",
+          "globe",
+          "graduation-cap",
+          "handshake",
+          "hash",
+          "heart",
+          "home",
+          "hourglass",
+          "image",
+          "key",
+          "layers",
+          "leaf",
+          "lightbulb",
+          "link",
+          "lock",
+          "mail",
+          "map-pin",
+          "megaphone",
+          "message-square",
+          "mic",
+          "moon",
+          "music",
+          "newspaper",
+          "package",
+          "pen-line",
+          "phone",
+          "pie-chart",
+          "pizza",
+          "plane",
+          "puzzle",
+          "receipt",
+          "rocket",
+          "send",
+          "settings",
+          "share-2",
+          "shield",
+          "shopping-cart",
+          "smile",
+          "sparkles",
+          "star",
+          "store",
+          "sun",
+          "tag",
+          "target",
+          "terminal",
+          "timer",
+          "trending-up",
+          "trophy",
+          "umbrella",
+          "user",
+          "users",
+          "video",
+          "wallet",
+          "wrench",
+          "zap"
+        ],
+        "title": "TagIcon"
+      },
+      "TagListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TagResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "TagListResponse"
+      },
+      "TagRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "examples": [
+              "665f0c2f9e7a4b1d2c3d4e5f"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "examples": [
+              "launch"
+            ]
+          },
+          "color": {
+            "$ref": "#/components/schemas/TagColor",
+            "examples": [
+              "violet"
+            ]
+          },
+          "icon": {
+            "$ref": "#/components/schemas/TagIcon",
+            "examples": [
+              "rocket"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "color",
+          "icon"
+        ],
+        "title": "TagRef",
+        "description": "A tag as it appears on a link: enough to render, no counts."
+      },
+      "TagResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "examples": [
+              "665f0c2f9e7a4b1d2c3d4e5f"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "examples": [
+              "launch"
+            ]
+          },
+          "color": {
+            "$ref": "#/components/schemas/TagColor",
+            "examples": [
+              "violet"
+            ]
+          },
+          "icon": {
+            "$ref": "#/components/schemas/TagIcon",
+            "examples": [
+              "rocket"
+            ]
+          },
+          "link_count": {
+            "type": "integer",
+            "title": "Link Count",
+            "description": "Links carrying the tag.",
+            "examples": [
+              14
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "color",
+          "icon",
+          "link_count",
+          "created_at"
+        ],
+        "title": "TagResponse",
+        "description": "A tag on its own endpoints, with its link count."
+      },
       "TestWebhookRequest": {
         "properties": {
           "event_type": {
@@ -12744,6 +14489,42 @@
         ],
         "title": "UpdateProfileRequest",
         "description": "Request body for PATCH /auth/me.\n\n``user_name`` is required but nullable: an explicit ``null`` clears\nthe display name (an accidental ``{}`` must not). Bounds mirror\nRegisterRequest \u2014 the two write paths for the same field."
+      },
+      "UpdateTagRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Tag name, at most 32 characters. Lowercased and trimmed on write; letters, digits, spaces, `-`, `_` and `.` only. Unique per account."
+          },
+          "color": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TagColor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of the palette keys. Omit on create to get the least-used colour in your account."
+          },
+          "icon": {
+            "$ref": "#/components/schemas/TagIcon",
+            "title": "Icon",
+            "description": "Icon key from the curated set (lucide names). Defaults to `tag`."
+          }
+        },
+        "type": "object",
+        "title": "UpdateTagRequest",
+        "description": "Rename, recolour or change the icon. Omitted fields are left as they are."
       },
       "UpdateUrlRequest": {
         "properties": {
@@ -12914,6 +14695,26 @@
               }
             ]
           },
+          "tag_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag Ids",
+            "description": "Ids of tags from `GET /api/v1/tags`, at most 10 per link. Every id must be one of your tags (400 otherwise). On PATCH the list replaces the stored one; `null` or `[]` clears it.",
+            "examples": [
+              [
+                "665f0c2f9e7a4b1d2c3d4e5f"
+              ]
+            ]
+          },
           "meta_tags": {
             "anyOf": [
               {
@@ -13077,6 +14878,14 @@
                 "IN": "https://example.in/"
               }
             ]
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagRef"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "The link's tags (id, name, colour), in the link's order."
           },
           "updated_at": {
             "type": "integer",
@@ -13373,6 +15182,13 @@
             ],
             "title": "Geo Rules"
           },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagRef"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
           "meta_tags": {
             "anyOf": [
               {
@@ -13535,6 +15351,14 @@
                 "IN": "https://example.in/"
               }
             ]
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagRef"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "The link's tags (id, name, colour), in the link's order."
           },
           "meta_tags": {
             "anyOf": [
@@ -13826,6 +15650,26 @@
         ],
         "title": "VerifyEmailResponse",
         "description": "Response body for POST /auth/verify-email (200)."
+      },
+      "WebRiskVerdict": {
+        "properties": {
+          "checked": {
+            "type": "boolean",
+            "title": "Checked"
+          },
+          "threats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Threats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checked"
+        ],
+        "title": "WebRiskVerdict"
       },
       "WebhookDeliveryResponse": {
         "properties": {

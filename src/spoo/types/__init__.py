@@ -39,6 +39,7 @@ from .stats import (
     StatsTimeRange,
     TimeBucketInfo,
 )
+from .tag import DeletedTag, Tag, TagColor, TagIcon, TagRef, TagsMatch
 
 __all__ = [
     "AliasCheck",
@@ -52,6 +53,7 @@ __all__ = [
     "ClaimedLinks",
     "ComputedMetrics",
     "DeletedLink",
+    "DeletedTag",
     "ExportFile",
     "EmojiEntry",
     "EmojiSet",
@@ -72,6 +74,11 @@ __all__ = [
     "StatsResponse",
     "StatsSummary",
     "StatsTimeRange",
+    "Tag",
+    "TagColor",
+    "TagIcon",
+    "TagRef",
+    "TagsMatch",
     "TimeBucketInfo",
     "UpdatedLink",
     "LinkFilter",

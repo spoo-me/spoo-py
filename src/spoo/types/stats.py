@@ -99,9 +99,10 @@ class PublicStatsResponse(BaseModel):
 class LinkStatsFilter:
     """Dimension filters valid on per-link stats and exports.
 
-    Deliberately excludes ``short_code`` and ``url_id``: the per-link
-    endpoints carry the link identity in the path and reject those filters.
-    Use :class:`StatsFilter` for account-wide queries.
+    Deliberately excludes ``short_code``, ``url_id``, ``tag`` and ``tag_id``:
+    the per-link endpoints carry the link identity in the path and silently
+    ignore tag filters, so the SDK rejects them. Use :class:`StatsFilter` for
+    account-wide queries.
     """
 
     _FIELDS: tuple[str, ...] = (
@@ -149,20 +150,29 @@ class LinkStatsFilter:
 
 
 class StatsFilter(LinkStatsFilter):
-    """Filter object for account-wide stats queries. Serialized to JSON."""
+    """Filter object for account-wide stats queries. Serialized to JSON.
 
-    _FIELDS = (*LinkStatsFilter._FIELDS, "short_code", "url_id")
+    ``tag`` (names) and ``tag_id`` (ids) scope the aggregate to clicks on
+    links carrying any listed tag. Filter only: tags are not a group-by
+    dimension.
+    """
+
+    _FIELDS = (*LinkStatsFilter._FIELDS, "short_code", "url_id", "tag", "tag_id")
 
     def __init__(
         self,
         *,
         short_code: list[str] | None = None,
         url_id: list[str] | None = None,
+        tag: list[str] | None = None,
+        tag_id: list[str] | None = None,
         **dimensions: list[str] | None,
     ) -> None:
         super().__init__(**dimensions)
         self.short_code = short_code
         self.url_id = url_id
+        self.tag = tag
+        self.tag_id = tag_id
 
 
 class ExportFile(bytes):
